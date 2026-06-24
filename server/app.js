@@ -5,6 +5,7 @@ const ahpRoute = require("./src/routes/ahp-route");
 const kriteriaRoute = require("./src/routes/kriteria-route");
 const indikatorRoute = require("./src/routes/indikator-route");
 const fuzzyRoute = require("./src/routes/fuzzy-route");
+const geojsonRoute = require("./src/routes/geojson-route");
 const app = express();
 const port = envConfig.port;
 
@@ -19,6 +20,7 @@ app.use("/ahp", ahpRoute);
 app.use("/kriteria", kriteriaRoute);
 app.use("/indikator", indikatorRoute);
 app.use("/fuzzy", fuzzyRoute);
+app.use("/geojson", geojsonRoute);
 
 // Error handling middleware should be the last middleware
 app.use((err, req, res, next) => {
