@@ -1,11 +1,5 @@
-/*
-  Warnings:
-
-  - You are about to drop the `User` table. If the table is not empty, all the data it contains will be lost.
-
-*/
--- DropTable
-DROP TABLE "User";
+-- Enable PostGIS extension (required for geometry type)
+CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -21,26 +15,13 @@ CREATE TABLE "users" (
 );
 
 -- CreateTable
-CREATE TABLE "upload_dataset" (
-    "id_upload" SERIAL NOT NULL,
-    "nama_file" VARCHAR(200) NOT NULL,
-    "jenis_upload" VARCHAR(50) NOT NULL,
-    "jumlah_feature" INTEGER,
-    "status" VARCHAR(50),
-    "catatan" TEXT,
-    "uploaded_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "upload_dataset_pkey" PRIMARY KEY ("id_upload")
-);
-
--- CreateTable
 CREATE TABLE "grid" (
     "id_grid" SERIAL NOT NULL,
     "kode_grid" VARCHAR(50) NOT NULL,
     "kecamatan" VARCHAR(100),
     "kelurahan" VARCHAR(100),
     "luas_grid" DECIMAL(15,6),
-    "geom" geometry(Polygon,4326) NOT NULL,
+    "geom" geometry(Polygon,32749) NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -82,32 +63,34 @@ CREATE TABLE "indikator" (
 );
 
 -- CreateTable
-CREATE TABLE "nilai_indikator" (
-    "id_nilai" SERIAL NOT NULL,
-    "id_upload" INTEGER,
-    "id_grid" INTEGER NOT NULL,
-    "id_indikator" INTEGER NOT NULL,
-    "nilai_asli" DECIMAL(18,6) NOT NULL,
-    "sumber_data" VARCHAR(100),
+CREATE TABLE "raster_layers" (
+    "id_raster_layer" SERIAL NOT NULL,
+    "id_indikator" INTEGER,
+    "id_analysis_run" INTEGER,
+    "tipe_raster" VARCHAR(30) NOT NULL,
+    "file_path" TEXT NOT NULL,
+    "original_filename" TEXT,
+    "crs" VARCHAR(50),
+    "resolution_x" DOUBLE PRECISION,
+    "resolution_y" DOUBLE PRECISION,
+    "width" INTEGER,
+    "height" INTEGER,
+    "band_count" INTEGER,
+    "extent" JSONB,
+    "min_value" DOUBLE PRECISION,
+    "max_value" DOUBLE PRECISION,
+    "mean_value" DOUBLE PRECISION,
+    "std_value" DOUBLE PRECISION,
+    "nodata_value" DOUBLE PRECISION,
+    "jumlah_pixel" INTEGER,
+    "jumlah_pixel_valid" INTEGER,
+    "jumlah_pixel_nodata" INTEGER,
+    "versi" INTEGER NOT NULL DEFAULT 1,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "nilai_indikator_pkey" PRIMARY KEY ("id_nilai")
-);
-
--- CreateTable
-CREATE TABLE "statistik_indikator" (
-    "id_statistik" SERIAL NOT NULL,
-    "id_indikator" INTEGER NOT NULL,
-    "nilai_min" DECIMAL(18,6),
-    "nilai_max" DECIMAL(18,6),
-    "nilai_mean" DECIMAL(18,6),
-    "nilai_median" DECIMAL(18,6),
-    "nilai_std" DECIMAL(18,6),
-    "jumlah_data" INTEGER,
-    "tanggal_hitung" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "statistik_indikator_pkey" PRIMARY KEY ("id_statistik")
+    CONSTRAINT "raster_layers_pkey" PRIMARY KEY ("id_raster_layer")
 );
 
 -- CreateTable
@@ -129,17 +112,6 @@ CREATE TABLE "aturan_fuzzy" (
     "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "aturan_fuzzy_pkey" PRIMARY KEY ("id_aturan")
-);
-
--- CreateTable
-CREATE TABLE "nilai_fuzzy" (
-    "id_fuzzy" SERIAL NOT NULL,
-    "id_grid" INTEGER NOT NULL,
-    "id_indikator" INTEGER NOT NULL,
-    "nilai_fuzzy" DECIMAL(10,6) NOT NULL,
-    "tanggal_hitung" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "nilai_fuzzy_pkey" PRIMARY KEY ("id_fuzzy")
 );
 
 -- CreateTable
@@ -205,24 +177,29 @@ CREATE TABLE "ahp_konsistensi" (
 );
 
 -- CreateTable
-CREATE TABLE "constraint_grid" (
-    "id_constraint" SERIAL NOT NULL,
-    "id_grid" INTEGER NOT NULL,
-    "nilai_constraint" INTEGER NOT NULL,
-    "jenis_constraint" VARCHAR(100),
+CREATE TABLE "analysis_run" (
+    "id_analysis_run" SERIAL NOT NULL,
+    "tipe_run" VARCHAR(30) NOT NULL DEFAULT 'default',
+    "id_simulasi" INTEGER,
+    "nama_run" VARCHAR(150),
+    "status" VARCHAR(30) NOT NULL DEFAULT 'success',
     "keterangan" TEXT,
+    "versi" INTEGER NOT NULL DEFAULT 1,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "constraint_grid_pkey" PRIMARY KEY ("id_constraint")
+    CONSTRAINT "analysis_run_pkey" PRIMARY KEY ("id_analysis_run")
 );
 
 -- CreateTable
 CREATE TABLE "hasil_wlc" (
     "id_hasil" SERIAL NOT NULL,
+    "id_analysis_run" INTEGER NOT NULL,
     "id_grid" INTEGER NOT NULL,
     "skor_wlc" DECIMAL(10,6) NOT NULL,
     "kelas_kesesuaian" VARCHAR(50) NOT NULL,
+    "ranking" INTEGER,
     "tanggal_hitung" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "hasil_wlc_pkey" PRIMARY KEY ("id_hasil")
@@ -248,47 +225,6 @@ CREATE TABLE "simulasi_bobot_indikator" (
     CONSTRAINT "simulasi_bobot_indikator_pkey" PRIMARY KEY ("id_simulasi_bobot")
 );
 
--- CreateTable
-CREATE TABLE "hasil_wlc_simulasi" (
-    "id_hasil_simulasi" SERIAL NOT NULL,
-    "id_simulasi" INTEGER NOT NULL,
-    "id_grid" INTEGER NOT NULL,
-    "skor_wlc" DECIMAL(10,6) NOT NULL,
-    "kelas_kesesuaian" VARCHAR(50) NOT NULL,
-    "tanggal_hitung" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "hasil_wlc_simulasi_pkey" PRIMARY KEY ("id_hasil_simulasi")
-);
-
--- CreateTable
-CREATE TABLE "coffee_shop_eksisting" (
-    "id_coffee_shop" SERIAL NOT NULL,
-    "nama" VARCHAR(150),
-    "alamat" TEXT,
-    "kecamatan" VARCHAR(100),
-    "kelurahan" VARCHAR(100),
-    "sumber_data" VARCHAR(100),
-    "geom" geometry(Point,4326) NOT NULL,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "coffee_shop_eksisting_pkey" PRIMARY KEY ("id_coffee_shop")
-);
-
--- CreateTable
-CREATE TABLE "validasi_spasial" (
-    "id_validasi" SERIAL NOT NULL,
-    "id_grid" INTEGER NOT NULL,
-    "kepadatan_kedai" DECIMAL(18,6),
-    "nilai_constraint" INTEGER,
-    "skor_wlc" DECIMAL(10,6),
-    "kelas_kesesuaian" VARCHAR(50),
-    "keterangan" TEXT,
-    "tanggal_validasi" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "validasi_spasial_pkey" PRIMARY KEY ("id_validasi")
-);
-
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
@@ -302,25 +238,25 @@ CREATE UNIQUE INDEX "kriteria_kode_kriteria_key" ON "kriteria"("kode_kriteria");
 CREATE UNIQUE INDEX "indikator_kode_indikator_key" ON "indikator"("kode_indikator");
 
 -- CreateIndex
-CREATE INDEX "nilai_indikator_id_upload_idx" ON "nilai_indikator"("id_upload");
+CREATE INDEX "indikator_id_kriteria_idx" ON "indikator"("id_kriteria");
 
 -- CreateIndex
-CREATE INDEX "nilai_indikator_id_indikator_idx" ON "nilai_indikator"("id_indikator");
+CREATE INDEX "raster_layers_id_indikator_idx" ON "raster_layers"("id_indikator");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "nilai_indikator_id_grid_id_indikator_key" ON "nilai_indikator"("id_grid", "id_indikator");
+CREATE INDEX "raster_layers_id_analysis_run_idx" ON "raster_layers"("id_analysis_run");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "statistik_indikator_id_indikator_key" ON "statistik_indikator"("id_indikator");
+CREATE INDEX "raster_layers_tipe_raster_idx" ON "raster_layers"("tipe_raster");
+
+-- CreateIndex
+CREATE INDEX "raster_layers_is_active_idx" ON "raster_layers"("is_active");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "raster_layers_id_indikator_tipe_raster_versi_key" ON "raster_layers"("id_indikator", "tipe_raster", "versi");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "aturan_fuzzy_id_indikator_key" ON "aturan_fuzzy"("id_indikator");
-
--- CreateIndex
-CREATE INDEX "nilai_fuzzy_id_indikator_idx" ON "nilai_fuzzy"("id_indikator");
-
--- CreateIndex
-CREATE UNIQUE INDEX "nilai_fuzzy_id_grid_id_indikator_key" ON "nilai_fuzzy"("id_grid", "id_indikator");
 
 -- CreateIndex
 CREATE INDEX "ahp_kriteria_matrix_id_kriteria_2_idx" ON "ahp_kriteria_matrix"("id_kriteria_2");
@@ -347,10 +283,22 @@ CREATE UNIQUE INDEX "bobot_indikator_id_indikator_key" ON "bobot_indikator"("id_
 CREATE INDEX "ahp_konsistensi_id_kriteria_idx" ON "ahp_konsistensi"("id_kriteria");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "constraint_grid_id_grid_key" ON "constraint_grid"("id_grid");
+CREATE INDEX "analysis_run_id_simulasi_idx" ON "analysis_run"("id_simulasi");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "hasil_wlc_id_grid_key" ON "hasil_wlc"("id_grid");
+CREATE INDEX "analysis_run_tipe_run_idx" ON "analysis_run"("tipe_run");
+
+-- CreateIndex
+CREATE INDEX "analysis_run_is_active_idx" ON "analysis_run"("is_active");
+
+-- CreateIndex
+CREATE INDEX "hasil_wlc_id_grid_idx" ON "hasil_wlc"("id_grid");
+
+-- CreateIndex
+CREATE INDEX "hasil_wlc_skor_wlc_idx" ON "hasil_wlc"("skor_wlc");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "hasil_wlc_id_analysis_run_id_grid_key" ON "hasil_wlc"("id_analysis_run", "id_grid");
 
 -- CreateIndex
 CREATE INDEX "simulasi_bobot_indikator_id_indikator_idx" ON "simulasi_bobot_indikator"("id_indikator");
@@ -358,38 +306,17 @@ CREATE INDEX "simulasi_bobot_indikator_id_indikator_idx" ON "simulasi_bobot_indi
 -- CreateIndex
 CREATE UNIQUE INDEX "simulasi_bobot_indikator_id_simulasi_id_indikator_key" ON "simulasi_bobot_indikator"("id_simulasi", "id_indikator");
 
--- CreateIndex
-CREATE INDEX "hasil_wlc_simulasi_id_grid_idx" ON "hasil_wlc_simulasi"("id_grid");
-
--- CreateIndex
-CREATE UNIQUE INDEX "hasil_wlc_simulasi_id_simulasi_id_grid_key" ON "hasil_wlc_simulasi"("id_simulasi", "id_grid");
-
--- CreateIndex
-CREATE INDEX "validasi_spasial_id_grid_idx" ON "validasi_spasial"("id_grid");
-
 -- AddForeignKey
 ALTER TABLE "indikator" ADD CONSTRAINT "indikator_id_kriteria_fkey" FOREIGN KEY ("id_kriteria") REFERENCES "kriteria"("id_kriteria") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "nilai_indikator" ADD CONSTRAINT "nilai_indikator_id_upload_fkey" FOREIGN KEY ("id_upload") REFERENCES "upload_dataset"("id_upload") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "raster_layers" ADD CONSTRAINT "raster_layers_id_indikator_fkey" FOREIGN KEY ("id_indikator") REFERENCES "indikator"("id_indikator") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "nilai_indikator" ADD CONSTRAINT "nilai_indikator_id_grid_fkey" FOREIGN KEY ("id_grid") REFERENCES "grid"("id_grid") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "nilai_indikator" ADD CONSTRAINT "nilai_indikator_id_indikator_fkey" FOREIGN KEY ("id_indikator") REFERENCES "indikator"("id_indikator") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "statistik_indikator" ADD CONSTRAINT "statistik_indikator_id_indikator_fkey" FOREIGN KEY ("id_indikator") REFERENCES "indikator"("id_indikator") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "raster_layers" ADD CONSTRAINT "raster_layers_id_analysis_run_fkey" FOREIGN KEY ("id_analysis_run") REFERENCES "analysis_run"("id_analysis_run") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "aturan_fuzzy" ADD CONSTRAINT "aturan_fuzzy_id_indikator_fkey" FOREIGN KEY ("id_indikator") REFERENCES "indikator"("id_indikator") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "nilai_fuzzy" ADD CONSTRAINT "nilai_fuzzy_id_grid_fkey" FOREIGN KEY ("id_grid") REFERENCES "grid"("id_grid") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "nilai_fuzzy" ADD CONSTRAINT "nilai_fuzzy_id_indikator_fkey" FOREIGN KEY ("id_indikator") REFERENCES "indikator"("id_indikator") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ahp_kriteria_matrix" ADD CONSTRAINT "ahp_kriteria_matrix_id_kriteria_1_fkey" FOREIGN KEY ("id_kriteria_1") REFERENCES "kriteria"("id_kriteria") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -416,7 +343,10 @@ ALTER TABLE "bobot_indikator" ADD CONSTRAINT "bobot_indikator_id_indikator_fkey"
 ALTER TABLE "ahp_konsistensi" ADD CONSTRAINT "ahp_konsistensi_id_kriteria_fkey" FOREIGN KEY ("id_kriteria") REFERENCES "kriteria"("id_kriteria") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "constraint_grid" ADD CONSTRAINT "constraint_grid_id_grid_fkey" FOREIGN KEY ("id_grid") REFERENCES "grid"("id_grid") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "analysis_run" ADD CONSTRAINT "analysis_run_id_simulasi_fkey" FOREIGN KEY ("id_simulasi") REFERENCES "simulasi"("id_simulasi") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "hasil_wlc" ADD CONSTRAINT "hasil_wlc_id_analysis_run_fkey" FOREIGN KEY ("id_analysis_run") REFERENCES "analysis_run"("id_analysis_run") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "hasil_wlc" ADD CONSTRAINT "hasil_wlc_id_grid_fkey" FOREIGN KEY ("id_grid") REFERENCES "grid"("id_grid") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -426,12 +356,3 @@ ALTER TABLE "simulasi_bobot_indikator" ADD CONSTRAINT "simulasi_bobot_indikator_
 
 -- AddForeignKey
 ALTER TABLE "simulasi_bobot_indikator" ADD CONSTRAINT "simulasi_bobot_indikator_id_indikator_fkey" FOREIGN KEY ("id_indikator") REFERENCES "indikator"("id_indikator") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "hasil_wlc_simulasi" ADD CONSTRAINT "hasil_wlc_simulasi_id_simulasi_fkey" FOREIGN KEY ("id_simulasi") REFERENCES "simulasi"("id_simulasi") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "hasil_wlc_simulasi" ADD CONSTRAINT "hasil_wlc_simulasi_id_grid_fkey" FOREIGN KEY ("id_grid") REFERENCES "grid"("id_grid") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "validasi_spasial" ADD CONSTRAINT "validasi_spasial_id_grid_fkey" FOREIGN KEY ("id_grid") REFERENCES "grid"("id_grid") ON DELETE CASCADE ON UPDATE CASCADE;

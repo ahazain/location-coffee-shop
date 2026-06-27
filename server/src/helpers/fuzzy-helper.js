@@ -1,8 +1,7 @@
 const { BadRequestError } = require("../utils/error-handling-util");
 
 class FuzzyHelper {
-  static ALLOWED_FUNCTIONS = ["linear", "sigmoid", "triangular"];
-  static ALLOWED_DIRECTIONS = ["benefit", "cost"];
+  static ALLOWED_FUNCTIONS = ["linear_increasing", "linear_decreasing", "near"];
 
   static round(value, digits = 6) {
     return Number(value.toFixed(digits));
@@ -33,93 +32,104 @@ class FuzzyHelper {
       throw new BadRequestError("fungsi_fuzzy wajib diisi.");
     }
 
-    const functionName = String(fungsi_fuzzy).toLowerCase();
+    const functionName = String(fungsi_fuzzy)
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "_")
+      .replace(/-/g, "_");
 
-    if (!this.ALLOWED_FUNCTIONS.includes(functionName)) {
+    const aliases = {
+      increasing: "linear_increasing",
+      linear_increasing: "linear_increasing",
+      linearincrease: "linear_increasing",
+
+      decreasing: "linear_decreasing",
+      linear_decreasing: "linear_decreasing",
+      lineardecrease: "linear_decreasing",
+
+      fuzzy_near: "near",
+      near: "near",
+    };
+
+    const normalized = aliases[functionName] || functionName;
+
+    if (!this.ALLOWED_FUNCTIONS.includes(normalized)) {
       throw new BadRequestError(
-        "fungsi_fuzzy hanya mendukung: linear, sigmoid, atau triangular.",
+        "fungsi_fuzzy hanya mendukung: linear_increasing, linear_decreasing, atau near.",
       );
     }
 
-    return functionName;
+    return normalized;
   }
 
-  static normalizeDirection(arah) {
-    if (!arah) {
-      throw new BadRequestError("arah wajib diisi.");
+  static getArahByFunction(fungsi_fuzzy) {
+    const functionName = this.normalizeFunctionName(fungsi_fuzzy);
+
+    if (functionName === "linear_increasing") {
+      return "benefit";
     }
 
-    const direction = String(arah).toLowerCase();
-
-    if (!this.ALLOWED_DIRECTIONS.includes(direction)) {
-      throw new BadRequestError("arah hanya boleh benefit atau cost.");
+    if (functionName === "linear_decreasing") {
+      return "cost";
     }
 
-    return direction;
+    if (functionName === "near") {
+      return "optimum";
+    }
+
+    throw new BadRequestError("Fungsi fuzzy tidak dikenali.");
   }
 
-  static calculateLinear(value, rule) {
+  static calculateLinearIncreasing(value, rule) {
     const x = this.toNumber(value, "nilai_asli");
     const min = this.toNumber(rule.nilai_min, "nilai_min");
     const max = this.toNumber(rule.nilai_max, "nilai_max");
-    const arah = this.normalizeDirection(rule.arah);
 
-    if (max <= min) {
-      throw new BadRequestError("nilai_max harus lebih besar dari nilai_min.");
+    if (max < min) {
+      throw new BadRequestError(
+        "nilai_max tidak boleh lebih kecil dari nilai_min.",
+      );
     }
 
-    let result;
-
-    if (arah === "benefit") {
-      result = (x - min) / (max - min);
-    } else {
-      result = (max - x) / (max - min);
+    if (max === min) {
+      return 0.5;
     }
+
+    const result = (x - min) / (max - min);
 
     return this.round(this.clamp01(result));
   }
 
-  static calculateSigmoid(value, rule) {
+  static calculateLinearDecreasing(value, rule) {
+    const x = this.toNumber(value, "nilai_asli");
+    const min = this.toNumber(rule.nilai_min, "nilai_min");
+    const max = this.toNumber(rule.nilai_max, "nilai_max");
+
+    if (max < min) {
+      throw new BadRequestError(
+        "nilai_max tidak boleh lebih kecil dari nilai_min.",
+      );
+    }
+
+    if (max === min) {
+      return 0.5;
+    }
+
+    const result = (max - x) / (max - min);
+
+    return this.round(this.clamp01(result));
+  }
+
+  static calculateNear(value, rule) {
     const x = this.toNumber(value, "nilai_asli");
     const midpoint = this.toNumber(rule.midpoint, "midpoint");
     const spread = this.toNumber(rule.spread, "spread");
-    const arah = this.normalizeDirection(rule.arah);
 
     if (spread <= 0) {
       throw new BadRequestError("spread harus lebih besar dari 0.");
     }
 
-    const z = (x - midpoint) / spread;
-    const benefitValue = 1 / (1 + Math.exp(-z));
-
-    const result = arah === "benefit" ? benefitValue : 1 - benefitValue;
-
-    return this.round(this.clamp01(result));
-  }
-
-  static calculateTriangular(value, rule) {
-    const x = this.toNumber(value, "nilai_asli");
-    const min = this.toNumber(rule.nilai_min, "nilai_min");
-    const mid = this.toNumber(rule.midpoint, "midpoint");
-    const max = this.toNumber(rule.nilai_max, "nilai_max");
-
-    if (!(min < mid && mid < max)) {
-      throw new BadRequestError(
-        "Untuk triangular, nilai_min < midpoint < nilai_max.",
-      );
-    }
-
-    let result;
-
-    if (x <= min || x >= max) {
-      result = 0;
-    } else if (x === mid) {
-      result = 1;
-    } else if (x < mid) {
-      result = (x - min) / (mid - min);
-    } else {
-      result = (max - x) / (max - mid);
-    }
+    const result = 1 / (1 + spread * Math.pow(x - midpoint, 2));
 
     return this.round(this.clamp01(result));
   }
@@ -127,16 +137,16 @@ class FuzzyHelper {
   static calculate(value, rule) {
     const functionName = this.normalizeFunctionName(rule.fungsi_fuzzy);
 
-    if (functionName === "linear") {
-      return this.calculateLinear(value, rule);
+    if (functionName === "linear_increasing") {
+      return this.calculateLinearIncreasing(value, rule);
     }
 
-    if (functionName === "sigmoid") {
-      return this.calculateSigmoid(value, rule);
+    if (functionName === "linear_decreasing") {
+      return this.calculateLinearDecreasing(value, rule);
     }
 
-    if (functionName === "triangular") {
-      return this.calculateTriangular(value, rule);
+    if (functionName === "near") {
+      return this.calculateNear(value, rule);
     }
 
     throw new BadRequestError("Fungsi fuzzy tidak dikenali.");
