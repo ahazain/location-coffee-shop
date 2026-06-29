@@ -76,7 +76,7 @@ model Kriteria {
 
   indikator Indikator[]
 
-  bobot_kriteria BobotKriteria?
+  bobot_kriteria BobotKriteria[]
 
   ahp_kriteria_1 AhpKriteriaMatrix[] @relation("AhpKriteria1")
   ahp_kriteria_2 AhpKriteriaMatrix[] @relation("AhpKriteria2")
@@ -111,7 +111,7 @@ model Indikator {
   kriteria Kriteria @relation(fields: [id_kriteria], references: [id_kriteria], onDelete: Cascade)
 
   aturan_fuzzy    AturanFuzzy?
-  bobot_indikator BobotIndikator?
+  bobot_indikator BobotIndikator[]
   raster_layers   RasterLayer[]
 
   ahp_indikator_1 AhpIndikatorMatrix[] @relation("AhpIndikator1")
@@ -221,6 +221,25 @@ model AturanFuzzy {
   @@map("aturan_fuzzy")
 }
 
+model Pakar {
+  id_pakar   Int     @id @default(autoincrement())
+  nama_pakar String  @db.VarChar(100)
+  institusi  String? @db.VarChar(100)
+  jabatan    String? @db.VarChar(100)
+  is_active  Boolean @default(true)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  ahp_kriteria_matrix  AhpKriteriaMatrix[]
+  ahp_indikator_matrix AhpIndikatorMatrix[]
+  ahp_konsistensi      AhpKonsistensi[]
+  bobot_kriteria       BobotKriteria[]
+  bobot_indikator      BobotIndikator[]
+
+  @@map("pakar")
+}
+
 /*
 |--------------------------------------------------------------------------
 | 6. AHP KRITERIA
@@ -229,29 +248,37 @@ model AturanFuzzy {
 
 model AhpKriteriaMatrix {
   id_matrix          Int      @id @default(autoincrement())
+  id_pakar           Int
   id_kriteria_1      Int
   id_kriteria_2      Int
   nilai_perbandingan Decimal  @db.Decimal(18, 6)
   created_at         DateTime @default(now())
   updated_at         DateTime @updatedAt
 
+  pakar      Pakar    @relation(fields: [id_pakar], references: [id_pakar], onDelete: Cascade)
   kriteria_1 Kriteria @relation("AhpKriteria1", fields: [id_kriteria_1], references: [id_kriteria], onDelete: Cascade)
   kriteria_2 Kriteria @relation("AhpKriteria2", fields: [id_kriteria_2], references: [id_kriteria], onDelete: Cascade)
 
-  @@unique([id_kriteria_1, id_kriteria_2])
+  @@unique([id_pakar, id_kriteria_1, id_kriteria_2])
   @@index([id_kriteria_2])
+  @@index([id_pakar])
   @@map("ahp_kriteria_matrix")
 }
 
 model BobotKriteria {
   id_bobot_kriteria Int      @id @default(autoincrement())
-  id_kriteria       Int      @unique
+  id_pakar          Int?
+  id_kriteria       Int
   bobot_kriteria    Decimal  @db.Decimal(10, 6)
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt
 
+  pakar    Pakar?   @relation(fields: [id_pakar], references: [id_pakar], onDelete: Cascade)
   kriteria Kriteria @relation(fields: [id_kriteria], references: [id_kriteria], onDelete: Cascade)
 
+  @@unique([id_pakar, id_kriteria])
+  @@index([id_kriteria])
+  @@index([id_pakar])
   @@map("bobot_kriteria")
 }
 
@@ -263,6 +290,7 @@ model BobotKriteria {
 
 model AhpIndikatorMatrix {
   id_matrix          Int      @id @default(autoincrement())
+  id_pakar           Int
   id_kriteria        Int
   id_indikator_1     Int
   id_indikator_2     Int
@@ -270,19 +298,22 @@ model AhpIndikatorMatrix {
   created_at         DateTime @default(now())
   updated_at         DateTime @updatedAt
 
+  pakar       Pakar     @relation(fields: [id_pakar], references: [id_pakar], onDelete: Cascade)
   kriteria    Kriteria  @relation(fields: [id_kriteria], references: [id_kriteria], onDelete: Cascade)
   indikator_1 Indikator @relation("AhpIndikator1", fields: [id_indikator_1], references: [id_indikator], onDelete: Cascade)
   indikator_2 Indikator @relation("AhpIndikator2", fields: [id_indikator_2], references: [id_indikator], onDelete: Cascade)
 
-  @@unique([id_kriteria, id_indikator_1, id_indikator_2])
+  @@unique([id_pakar, id_kriteria, id_indikator_1, id_indikator_2])
   @@index([id_indikator_1])
   @@index([id_indikator_2])
+  @@index([id_pakar])
   @@map("ahp_indikator_matrix")
 }
 
 model BobotIndikator {
   id_bobot_indikator Int      @id @default(autoincrement())
-  id_indikator       Int      @unique
+  id_pakar           Int?
+  id_indikator       Int
 
   // Bobot lokal dalam kriteria
   bobot_lokal Decimal @db.Decimal(10, 6)
@@ -293,8 +324,12 @@ model BobotIndikator {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
+  pakar     Pakar?    @relation(fields: [id_pakar], references: [id_pakar], onDelete: Cascade)
   indikator Indikator @relation(fields: [id_indikator], references: [id_indikator], onDelete: Cascade)
 
+  @@unique([id_pakar, id_indikator])
+  @@index([id_indikator])
+  @@index([id_pakar])
   @@map("bobot_indikator")
 }
 
@@ -306,6 +341,7 @@ model BobotIndikator {
 
 model AhpKonsistensi {
   id_konsistensi     Int      @id @default(autoincrement())
+  id_pakar           Int?
   tipe               String   @db.VarChar(30) // kriteria / indikator
   id_kriteria        Int?
   lambda_max         Decimal? @db.Decimal(18, 6)
@@ -314,9 +350,11 @@ model AhpKonsistensi {
   status_konsistensi String?  @db.VarChar(30)
   tanggal_hitung     DateTime @default(now())
 
+  pakar    Pakar?    @relation(fields: [id_pakar], references: [id_pakar], onDelete: Cascade)
   kriteria Kriteria? @relation(fields: [id_kriteria], references: [id_kriteria], onDelete: SetNull)
 
   @@index([id_kriteria])
+  @@index([id_pakar])
   @@map("ahp_konsistensi")
 }
 
@@ -374,6 +412,7 @@ model HasilWlc {
   skor_wlc         Decimal @db.Decimal(10, 6)
   kelas_kesesuaian String  @db.VarChar(50)
   ranking          Int?
+  nilai_indikator  Json?
 
   tanggal_hitung DateTime @default(now())
 

@@ -1,11 +1,13 @@
 require("dotenv").config();
 const envConfig = require("./src/configs/env-config");
 const express = require("express");
+const pakarRoute = require("./src/routes/pakar-route");
 const ahpRoute = require("./src/routes/ahp-route");
 const kriteriaRoute = require("./src/routes/kriteria-route");
 const indikatorRoute = require("./src/routes/indikator-route");
 const fuzzyRoute = require("./src/routes/fuzzy-route");
 const geotiffRoute = require("./src/routes/geotiff-route");
+const wlcRoute = require("./src/routes/wlc-route");
 const app = express();
 const port = envConfig.port;
 
@@ -16,11 +18,13 @@ app.get("/", (req, res) => {
   res.send("the system works !!!");
 });
 
+app.use("/ahp/pakar", pakarRoute);
 app.use("/ahp", ahpRoute);
 app.use("/kriteria", kriteriaRoute);
 app.use("/indikator", indikatorRoute);
 app.use("/fuzzy", fuzzyRoute);
 app.use("/geotiff", geotiffRoute);
+app.use("/wlc", wlcRoute);
 
 // Error handling middleware should be the last middleware
 app.use((err, req, res, next) => {

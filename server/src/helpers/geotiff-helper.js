@@ -391,25 +391,52 @@ class GeotiffHelper {
       PlanarConfiguration: 1,         // 1 = Chunky
     };
 
+    // Salin geoKeys dari referensi agar library mengenali proyeksi CRS
+    try {
+      const refGeoKeys = refImage.getGeoKeys();
+      if (refGeoKeys) {
+        for (const key in refGeoKeys) {
+          if (refGeoKeys.hasOwnProperty(key)) {
+            metadata[key] = refGeoKeys[key];
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Gagal menyalin GeoKeys:", err.message);
+    }
+
     // Salin tag georeferensi dari referensi agar CRS & geotransform tetap sama
-    if (fileDir.ModelPixelScale) {
-      metadata.ModelPixelScale = Array.from(fileDir.ModelPixelScale);
+    const getTag = (tagId) => {
+      if (!fileDir) return null;
+      if (fileDir.actualizedFields && typeof fileDir.actualizedFields.get === "function") {
+        return fileDir.actualizedFields.get(tagId);
+      }
+      return fileDir[tagId];
+    };
+
+    const modelPixelScale = getTag(33550);
+    if (modelPixelScale) {
+      metadata.ModelPixelScale = Array.from(modelPixelScale);
     }
 
-    if (fileDir.ModelTiepoint) {
-      metadata.ModelTiepoint = Array.from(fileDir.ModelTiepoint);
+    const modelTiepoint = getTag(33922);
+    if (modelTiepoint) {
+      metadata.ModelTiepoint = Array.from(modelTiepoint);
     }
 
-    if (fileDir.GeoKeyDirectory) {
-      metadata.GeoKeyDirectory = Array.from(fileDir.GeoKeyDirectory);
+    const geoKeyDirectory = getTag(34735);
+    if (geoKeyDirectory) {
+      metadata.GeoKeyDirectory = Array.from(geoKeyDirectory);
     }
 
-    if (fileDir.GeoDoubleParams) {
-      metadata.GeoDoubleParams = Array.from(fileDir.GeoDoubleParams);
+    const geoDoubleParams = getTag(34736);
+    if (geoDoubleParams) {
+      metadata.GeoDoubleParams = Array.from(geoDoubleParams);
     }
 
-    if (fileDir.GeoAsciiParams) {
-      metadata.GeoAsciiParams = fileDir.GeoAsciiParams;
+    const geoAsciiParams = getTag(34737);
+    if (geoAsciiParams) {
+      metadata.GeoAsciiParams = geoAsciiParams;
     }
 
     // Tetapkan nilai nodata jika ada
@@ -425,7 +452,7 @@ class GeotiffHelper {
     }
 
     // Tulis GeoTIFF
-    const data = [new Float32Array(pixelValues)];
+    const data = new Float32Array(pixelValues);
     let arrayBuffer;
 
     try {

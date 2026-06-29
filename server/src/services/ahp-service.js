@@ -151,12 +151,13 @@ class AHPService {
     };
   }
 
-  static buildKriteriaMatrixPayload(itemIds, matrix) {
+  static buildKriteriaMatrixPayload(idPakar, itemIds, matrix) {
     const payload = [];
 
     for (let row = 0; row < itemIds.length; row++) {
       for (let col = 0; col < itemIds.length; col++) {
         payload.push({
+          id_pakar: idPakar,
           id_kriteria_1: itemIds[row],
           id_kriteria_2: itemIds[col],
           nilai_perbandingan: matrix[row][col],
@@ -167,14 +168,24 @@ class AHPService {
     return payload;
   }
 
-  static buildBobotKriteriaPayload(itemIds, weights) {
+  static buildBobotKriteriaPayload(idPakar, itemIds, weights) {
     return itemIds.map((id, index) => ({
+      id_pakar: idPakar,
       id_kriteria: id,
       bobot_kriteria: weights[index],
     }));
   }
 
-  static async saveKriteriaAHP({ matrix, item_ids }) {
+  static async saveKriteriaAHP({ id_pakar, matrix, item_ids }) {
+    const parsedIdPakar = this.parseId(id_pakar, "ID Pakar");
+
+    const pakar = await prisma.pakar.findUnique({
+      where: { id_pakar: parsedIdPakar },
+    });
+    if (!pakar) {
+      throw new NotFoundError("Pakar tidak ditemukan.");
+    }
+
     const calculated = await this.calculateKriteriaAHP({
       matrix,
       item_ids,
@@ -189,17 +200,21 @@ class AHPService {
     const itemIds = item_ids.map((id) => this.parseId(id, "Kriteria ID"));
 
     const matrixPayload = this.buildKriteriaMatrixPayload(
+      parsedIdPakar,
       itemIds,
       calculated.matrix,
     );
 
     const bobotPayload = this.buildBobotKriteriaPayload(
+      parsedIdPakar,
       itemIds,
       calculated.weights.map((item) => item.bobot),
     );
 
     await prisma.$transaction(async (tx) => {
-      await tx.ahpKriteriaMatrix.deleteMany({});
+      await tx.ahpKriteriaMatrix.deleteMany({
+        where: { id_pakar: parsedIdPakar }
+      });
 
       await tx.ahpKriteriaMatrix.createMany({
         data: matrixPayload,
@@ -207,6 +222,7 @@ class AHPService {
 
       await tx.bobotKriteria.deleteMany({
         where: {
+          id_pakar: parsedIdPakar,
           id_kriteria: {
             in: itemIds,
           },
@@ -217,8 +233,16 @@ class AHPService {
         data: bobotPayload,
       });
 
+      await tx.ahpKonsistensi.deleteMany({
+        where: {
+          id_pakar: parsedIdPakar,
+          tipe: "kriteria",
+        },
+      });
+
       await tx.ahpKonsistensi.create({
         data: {
+          id_pakar: parsedIdPakar,
           tipe: "kriteria",
           id_kriteria: null,
           lambda_max: calculated.lambda_max,
@@ -229,8 +253,12 @@ class AHPService {
       });
     });
 
+    // Otomatis hitung ulang bobot konsensus rata-rata kriteria
+    await this.recalculateConsensusKriteriaAHP();
+
     return {
       tipe: "kriteria",
+      id_pakar: parsedIdPakar,
       status_simpan: "saved",
       ...calculated,
     };
@@ -326,12 +354,13 @@ class AHPService {
     };
   }
 
-  static buildIndikatorMatrixPayload(idKriteria, itemIds, matrix) {
+  static buildIndikatorMatrixPayload(idPakar, idKriteria, itemIds, matrix) {
     const payload = [];
 
     for (let row = 0; row < itemIds.length; row++) {
       for (let col = 0; col < itemIds.length; col++) {
         payload.push({
+          id_pakar: idPakar,
           id_kriteria: idKriteria,
           id_indikator_1: itemIds[row],
           id_indikator_2: itemIds[col],
@@ -343,12 +372,13 @@ class AHPService {
     return payload;
   }
 
-  static buildBobotIndikatorPayload(itemIds, weights, bobotKriteria) {
+  static buildBobotIndikatorPayload(idPakar, itemIds, weights, bobotKriteria) {
     return itemIds.map((id, index) => {
       const bobotLokal = weights[index];
       const bobotAkhir = bobotLokal * bobotKriteria;
 
       return {
+        id_pakar: idPakar,
         id_indikator: id,
         bobot_lokal: bobotLokal,
         bobot_akhir: bobotAkhir,
@@ -356,8 +386,16 @@ class AHPService {
     });
   }
 
-  static async saveIndikatorAHP({ id_kriteria, matrix, item_ids }) {
+  static async saveIndikatorAHP({ id_pakar, id_kriteria, matrix, item_ids }) {
+    const parsedIdPakar = this.parseId(id_pakar, "ID Pakar");
     const parsedIdKriteria = this.parseId(id_kriteria, "ID kriteria");
+
+    const pakar = await prisma.pakar.findUnique({
+      where: { id_pakar: parsedIdPakar },
+    });
+    if (!pakar) {
+      throw new NotFoundError("Pakar tidak ditemukan.");
+    }
 
     const calculated = await this.calculateIndikatorAHP({
       id_kriteria: parsedIdKriteria,
@@ -371,15 +409,16 @@ class AHPService {
       );
     }
 
-    const bobotKriteria = await prisma.bobotKriteria.findUnique({
+    const bobotKriteria = await prisma.bobotKriteria.findFirst({
       where: {
         id_kriteria: parsedIdKriteria,
+        id_pakar: parsedIdPakar,
       },
     });
 
     if (!bobotKriteria) {
       throw new BadRequestError(
-        "Bobot kriteria belum tersedia. Hitung dan simpan AHP kriteria terlebih dahulu.",
+        "Bobot kriteria untuk pakar ini belum tersedia. Hitung dan simpan AHP kriteria pakar terlebih dahulu.",
       );
     }
 
@@ -387,12 +426,14 @@ class AHPService {
     const bobotKriteriaValue = Number(bobotKriteria.bobot_kriteria);
 
     const matrixPayload = this.buildIndikatorMatrixPayload(
+      parsedIdPakar,
       parsedIdKriteria,
       itemIds,
       calculated.matrix,
     );
 
     const bobotPayload = this.buildBobotIndikatorPayload(
+      parsedIdPakar,
       itemIds,
       calculated.weights.map((item) => item.bobot),
       bobotKriteriaValue,
@@ -401,6 +442,7 @@ class AHPService {
     await prisma.$transaction(async (tx) => {
       await tx.ahpIndikatorMatrix.deleteMany({
         where: {
+          id_pakar: parsedIdPakar,
           id_kriteria: parsedIdKriteria,
         },
       });
@@ -411,6 +453,7 @@ class AHPService {
 
       await tx.bobotIndikator.deleteMany({
         where: {
+          id_pakar: parsedIdPakar,
           id_indikator: {
             in: itemIds,
           },
@@ -421,8 +464,17 @@ class AHPService {
         data: bobotPayload,
       });
 
+      await tx.ahpKonsistensi.deleteMany({
+        where: {
+          id_pakar: parsedIdPakar,
+          id_kriteria: parsedIdKriteria,
+          tipe: "indikator",
+        },
+      });
+
       await tx.ahpKonsistensi.create({
         data: {
+          id_pakar: parsedIdPakar,
           tipe: "indikator",
           id_kriteria: parsedIdKriteria,
           lambda_max: calculated.lambda_max,
@@ -433,8 +485,13 @@ class AHPService {
       });
     });
 
+    // Otomatis hitung ulang bobot konsensus rata-rata kriteria & indikator untuk kriteria ini
+    await this.recalculateConsensusKriteriaAHP();
+    await this.recalculateConsensusIndikatorAHP(parsedIdKriteria);
+
     return {
       tipe: "indikator",
+      id_pakar: parsedIdPakar,
       id_kriteria: parsedIdKriteria,
       bobot_kriteria: bobotKriteriaValue,
       status_simpan: "saved",
@@ -445,6 +502,131 @@ class AHPService {
         bobot_akhir: bobotPayload[index].bobot_akhir,
       })),
     };
+  }
+
+  static async recalculateConsensusKriteriaAHP() {
+    const kriteriaList = await prisma.kriteria.findMany({
+      where: { is_active: true },
+      select: { id_kriteria: true }
+    });
+
+    const activePakar = await prisma.pakar.findMany({
+      where: { is_active: true },
+      select: { id_pakar: true }
+    });
+    const pakarIds = activePakar.map(p => p.id_pakar);
+
+    if (pakarIds.length === 0) return;
+
+    const consensusWeights = [];
+    for (const crit of kriteriaList) {
+      const weights = await prisma.bobotKriteria.findMany({
+        where: {
+          id_kriteria: crit.id_kriteria,
+          id_pakar: { in: pakarIds }
+        },
+        select: { bobot_kriteria: true }
+      });
+
+      if (weights.length > 0) {
+        const sum = weights.reduce((acc, curr) => acc + Number(curr.bobot_kriteria), 0);
+        const avg = sum / weights.length;
+        consensusWeights.push({
+          id_kriteria: crit.id_kriteria,
+          bobot_kriteria: avg
+        });
+      }
+    }
+
+    const totalConsensus = consensusWeights.reduce((acc, c) => acc + c.bobot_kriteria, 0);
+    if (totalConsensus > 0) {
+      consensusWeights.forEach(c => {
+        c.bobot_kriteria = c.bobot_kriteria / totalConsensus;
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.bobotKriteria.deleteMany({
+        where: { id_pakar: null }
+      });
+
+      await tx.bobotKriteria.createMany({
+        data: consensusWeights.map(c => ({
+          id_pakar: null,
+          id_kriteria: c.id_kriteria,
+          bobot_kriteria: c.bobot_kriteria
+        }))
+      });
+    });
+  }
+
+  static async recalculateConsensusIndikatorAHP(idKriteria) {
+    const indikatorList = await prisma.indikator.findMany({
+      where: { id_kriteria: idKriteria, is_active: true },
+      select: { id_indikator: true }
+    });
+
+    const activePakar = await prisma.pakar.findMany({
+      where: { is_active: true },
+      select: { id_pakar: true }
+    });
+    const pakarIds = activePakar.map(p => p.id_pakar);
+
+    if (pakarIds.length === 0) return;
+
+    const consensusKriteria = await prisma.bobotKriteria.findFirst({
+      where: {
+        id_pakar: null,
+        id_kriteria: idKriteria
+      }
+    });
+    const bobotKriteriaConsensus = consensusKriteria ? Number(consensusKriteria.bobot_kriteria) : 0;
+
+    const consensusIndikatorWeights = [];
+    for (const ind of indikatorList) {
+      const weights = await prisma.bobotIndikator.findMany({
+        where: {
+          id_indikator: ind.id_indikator,
+          id_pakar: { in: pakarIds }
+        },
+        select: { bobot_lokal: true }
+      });
+
+      if (weights.length > 0) {
+        const sum = weights.reduce((acc, curr) => acc + Number(curr.bobot_lokal), 0);
+        const avgLokal = sum / weights.length;
+        consensusIndikatorWeights.push({
+          id_indikator: ind.id_indikator,
+          bobot_lokal: avgLokal
+        });
+      }
+    }
+
+    const totalLokal = consensusIndikatorWeights.reduce((acc, w) => acc + w.bobot_lokal, 0);
+    if (totalLokal > 0) {
+      consensusIndikatorWeights.forEach(w => {
+        w.bobot_lokal = w.bobot_lokal / totalLokal;
+        w.bobot_akhir = w.bobot_lokal * bobotKriteriaConsensus;
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.bobotIndikator.deleteMany({
+        where: {
+          id_pakar: null,
+          id_indikator: { in: indikatorList.map(i => i.id_indikator) }
+        }
+      });
+
+      await tx.bobotIndikator.createMany({
+        data: consensusIndikatorWeights.map(w => ({
+          id_pakar: null,
+          id_indikator: w.id_indikator,
+          bobot_lokal: w.bobot_lokal,
+          bobot_akhir: w.bobot_akhir
+        }))
+      });
+    });
   }
 }
 

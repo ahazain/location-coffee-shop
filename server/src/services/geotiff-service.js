@@ -49,12 +49,7 @@ class GeotiffService {
         throw new BadRequestError("Indikator tidak aktif.");
       }
 
-      // LANGKAH 3: Validasi jenis indikator (bukan bertipe constraint)
-      if (indikator.jenis_indikator === "constraint") {
-        throw new BadRequestError(
-          "Indikator constraint sebaiknya diunggah melalui modul constraint.",
-        );
-      }
+      // LANGKAH 3: Validasi jenis indikator (constraint diperbolehkan diunggah di sini)
 
       const tipeRaster = "raw";
 

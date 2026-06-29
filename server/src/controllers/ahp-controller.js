@@ -44,9 +44,10 @@ class AHPController {
 
   static async saveKriteriaAHP(req, res) {
     try {
-      const { matrix, item_ids } = req.body;
+      const { id_pakar, matrix, item_ids } = req.body;
 
       const data = await AHPService.saveKriteriaAHP({
+        id_pakar,
         matrix,
         item_ids,
       });
@@ -95,9 +96,10 @@ class AHPController {
   static async saveIndikatorAHP(req, res) {
     try {
       const { id_kriteria } = req.params;
-      const { matrix, item_ids } = req.body;
+      const { id_pakar, matrix, item_ids } = req.body;
 
       const data = await AHPService.saveIndikatorAHP({
+        id_pakar,
         id_kriteria,
         matrix,
         item_ids,

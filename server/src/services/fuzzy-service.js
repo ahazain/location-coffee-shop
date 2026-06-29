@@ -184,13 +184,65 @@ class FuzzyService {
 
     const indikator = await this.getIndikatorOrThrow(id_indikator);
 
+    const scarcityCheck = midpoint !== undefined && midpoint !== null && midpoint !== "";
     const validated = this.validateRulePayload({
       fungsi_fuzzy,
-      midpoint,
-      spread,
+      midpoint: scarcityCheck ? midpoint : 0,
+      spread: spread ?? 0.1,
     });
 
     const isNear = validated.fungsi_fuzzy === "near";
+    const statusSpread = spread !== undefined && spread !== null && spread !== "" ? Number(spread) : 0.1;
+
+    // Ambil raster raw aktif untuk auto-fill min/max/median
+    const rawRaster = await prisma.rasterLayer.findFirst({
+      where: {
+        id_indikator: indikator.id_indikator,
+        tipe_raster: "raw",
+        is_active: true,
+      },
+    });
+
+    let autoMin = null;
+    let autoMax = null;
+    let autoMidpoint = isNear ? (scarcityCheck ? Number(midpoint) : null) : null;
+
+    if (rawRaster) {
+      autoMin = rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
+      autoMax = rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
+
+      if (isNear && autoMidpoint === null) {
+        try {
+          const rawAbsPath = path.isAbsolute(rawRaster.file_path)
+            ? rawRaster.file_path
+            : path.join(process.cwd(), rawRaster.file_path);
+
+          const GeotiffHelper = require("../helpers/geotiff-helper");
+          const { noDataValue, pixelValues } = await GeotiffHelper.readPixelsForFuzzy(rawAbsPath);
+
+          const validValues = pixelValues.filter(v => 
+            v !== null && 
+            v !== undefined && 
+            !Number.isNaN(v) && 
+            Number.isFinite(v) && 
+            (noDataValue === null || v !== noDataValue)
+          );
+
+          if (validValues.length > 0) {
+            validValues.sort((a, b) => a - b);
+            const mid = Math.floor(validValues.length / 2);
+            autoMidpoint = validValues.length % 2 !== 0 
+              ? validValues[mid] 
+              : (validValues[mid - 1] + validValues[mid]) / 2;
+          } else {
+            autoMidpoint = 0;
+          }
+        } catch (err) {
+          console.error("Gagal menghitung median otomatis:", err.message);
+          autoMidpoint = 0;
+        }
+      }
+    }
 
     const saved = await prisma.aturanFuzzy.upsert({
       where: {
@@ -199,21 +251,20 @@ class FuzzyService {
       update: {
         fungsi_fuzzy: validated.fungsi_fuzzy,
         arah: validated.arah,
-        // Min-max diambil dari raster raw saat hitung fuzzy, bukan disimpan manual
-        nilai_min: null,
-        nilai_max: null,
-        midpoint: isNear ? midpoint : null,
-        spread: isNear ? spread : null,
+        nilai_min: autoMin,
+        nilai_max: autoMax,
+        midpoint: isNear ? autoMidpoint : null,
+        spread: isNear ? statusSpread : null,
         keterangan,
       },
       create: {
         id_indikator: indikator.id_indikator,
         fungsi_fuzzy: validated.fungsi_fuzzy,
         arah: validated.arah,
-        nilai_min: null,
-        nilai_max: null,
-        midpoint: isNear ? midpoint : null,
-        spread: isNear ? spread : null,
+        nilai_min: autoMin,
+        nilai_max: autoMax,
+        midpoint: isNear ? autoMidpoint : null,
+        spread: isNear ? statusSpread : null,
         keterangan,
       },
     });
@@ -243,8 +294,66 @@ class FuzzyService {
       spread: payload.spread !== undefined ? payload.spread : existing.spread,
     };
 
-    const validated = this.validateRulePayload(mergedPayload);
-    const isNear = validated.fungsi_fuzzy === "near";
+    const isNear = mergedPayload.fungsi_fuzzy === "near";
+    const scarcityCheck = mergedPayload.midpoint !== undefined && mergedPayload.midpoint !== null && mergedPayload.midpoint !== "";
+
+    const validated = this.validateRulePayload({
+      fungsi_fuzzy: mergedPayload.fungsi_fuzzy,
+      midpoint: scarcityCheck ? mergedPayload.midpoint : 0,
+      spread: mergedPayload.spread ?? 0.1,
+    });
+
+    const statusSpread = mergedPayload.spread !== undefined && mergedPayload.spread !== null && mergedPayload.spread !== "" ? Number(mergedPayload.spread) : 0.1;
+
+    // Ambil raster raw aktif untuk update min/max/median
+    const rawRaster = await prisma.rasterLayer.findFirst({
+      where: {
+        id_indikator: parsedId,
+        tipe_raster: "raw",
+        is_active: true,
+      },
+    });
+
+    let autoMin = null;
+    let autoMax = null;
+    let autoMidpoint = isNear ? (scarcityCheck ? Number(mergedPayload.midpoint) : null) : null;
+
+    if (rawRaster) {
+      autoMin = rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
+      autoMax = rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
+
+      if (isNear && autoMidpoint === null) {
+        try {
+          const rawAbsPath = path.isAbsolute(rawRaster.file_path)
+            ? rawRaster.file_path
+            : path.join(process.cwd(), rawRaster.file_path);
+
+          const GeotiffHelper = require("../helpers/geotiff-helper");
+          const { noDataValue, pixelValues } = await GeotiffHelper.readPixelsForFuzzy(rawAbsPath);
+
+          const validValues = pixelValues.filter(v => 
+            v !== null && 
+            v !== undefined && 
+            !Number.isNaN(v) && 
+            Number.isFinite(v) && 
+            (noDataValue === null || v !== noDataValue)
+          );
+
+          if (validValues.length > 0) {
+            validValues.sort((a, b) => a - b);
+            const mid = Math.floor(validValues.length / 2);
+            autoMidpoint = validValues.length % 2 !== 0 
+              ? validValues[mid] 
+              : (validValues[mid - 1] + validValues[mid]) / 2;
+          } else {
+            autoMidpoint = 0;
+          }
+        } catch (err) {
+          console.error("Gagal menghitung median otomatis:", err.message);
+          autoMidpoint = 0;
+        }
+      }
+    }
 
     const updated = await prisma.aturanFuzzy.update({
       where: {
@@ -253,10 +362,10 @@ class FuzzyService {
       data: {
         fungsi_fuzzy: validated.fungsi_fuzzy,
         arah: validated.arah,
-        nilai_min: null,
-        nilai_max: null,
-        midpoint: isNear ? mergedPayload.midpoint : null,
-        spread: isNear ? mergedPayload.spread : null,
+        nilai_min: autoMin,
+        nilai_max: autoMax,
+        midpoint: isNear ? autoMidpoint : null,
+        spread: isNear ? statusSpread : null,
         keterangan:
           payload.keterangan !== undefined
             ? payload.keterangan
