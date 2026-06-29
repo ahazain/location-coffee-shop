@@ -5,13 +5,17 @@ class AHPController {
   static async calculateAHP(req, res) {
     try {
       const { matrix, items } = req.body;
-
-      const data = await AHPService.calculateAHP({
-        matrix,
-        items,
-      });
-
+      const data = await AHPService.calculateAHP({ matrix, items });
       ResponseHelper.success(res, data, "Perhitungan AHP berhasil.");
+    } catch (error) {
+      ResponseHelper.error(res, error);
+    }
+  }
+
+  static async getBobotKonsensus(req, res) {
+    try {
+      const data = await AHPService.getBobotKonsensus();
+      ResponseHelper.success(res, data, "Bobot konsensus AHP berhasil diambil.");
     } catch (error) {
       ResponseHelper.error(res, error);
     }

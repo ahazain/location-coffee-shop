@@ -1,10 +1,11 @@
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, BrainCircuit, Calculator, LayoutDashboard, MapPinned, Settings, Sigma, Store, UploadCloud } from "lucide-react";
+import { BarChart3, BrainCircuit, Calculator, LayoutDashboard, MapPinned, Settings, Sigma, Store, UploadCloud, ListTree } from "lucide-react";
 import { cn } from "../../utils/className";
 
 const navItems = [
   { label: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Input Dataset", to: "/admin/datasets", icon: UploadCloud },
+  { label: "Kriteria", to: "/admin/kriteria", icon: ListTree },
   { label: "Indikator", to: "/admin/indicators", icon: BarChart3 },
   { label: "Proses Fuzzy", to: "/admin/fuzzy", icon: Sigma },
   { label: "AHP Responden", to: "/admin/ahp", icon: BrainCircuit },

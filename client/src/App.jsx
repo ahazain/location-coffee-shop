@@ -10,6 +10,7 @@ import AdminFuzzyPage from "./pages/AdminFuzzyPage";
 import AdminAhpPage from "./pages/AdminAhpPage";
 import AdminWlcPage from "./pages/AdminWlcPage";
 import AdminMapPreviewPage from "./pages/AdminMapPreviewPage";
+import AdminKriteriaPage from "./pages/AdminKriteriaPage";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/map" element={<Navigate to="/peta-rekomendasi" replace />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+        <Route path="/admin/kriteria" element={<AdminKriteriaPage />} />
         <Route path="/admin/indicators" element={<AdminIndicatorsPage />} />
         <Route path="/admin/datasets" element={<AdminDatasetsPage />} />
         <Route path="/admin/fuzzy" element={<AdminFuzzyPage />} />

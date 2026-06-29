@@ -1,102 +1,66 @@
-import { mapDummy } from "../data/mapDummy";
-import { weightService } from "./weightService";
-import {
-  calculateTopIndicators,
-  calculateWlcScore,
-  classifyScore,
-  summarizeMap,
-} from "../utils/wlc";
-
-function cloneData(data) {
-  return structuredClone(data);
-}
-
-function applyWlcToMap(geojson, globalIndicatorWeights, mode = "default", weightSource = "Bobot default AHP") {
-  const cloned = cloneData(geojson);
-
-  cloned.features = cloned.features.map((feature) => {
-    const indicatorScores = feature.properties.indicatorScores;
-    const mask = feature.properties.mask ?? 1;
-    const score = mask === 0 ? 0 : calculateWlcScore(indicatorScores, globalIndicatorWeights, mask);
-    const suitabilityClass = classifyScore(score, mask);
-    const topIndicators = calculateTopIndicators(indicatorScores, globalIndicatorWeights);
-    const baseProperties = {
-      ...feature.properties,
-      scoreUsed: score,
-      suitabilityClass,
-      topIndicators,
-      weightSource,
-    };
-
-    if (mode === "default") {
-      return {
-        ...feature,
-        properties: {
-          ...baseProperties,
-          scoreDefault: score,
-          scoreCustom: undefined,
-        },
-      };
-    }
-
-    return {
-      ...feature,
-      properties: {
-        ...baseProperties,
-        scoreDefault: feature.properties.scoreDefault,
-        scoreCustom: score,
-      },
-    };
-  });
-
-  cloned.summary = summarizeMap(cloned.features);
-  cloned.weightSource = weightSource;
-  cloned.weightMode = mode;
-
-  return cloned;
-}
+import { wlcService } from "./api/wlcService";
+import { ahpService } from "./api/ahpService";
 
 export const mapService = {
   async getDefaultMap() {
-    const weights = await weightService.getDefaultWeights();
+    const grids = await wlcService.getGrids();
+    const konsensus = await ahpService.getBobotKonsensus();
 
-    return {
-      ...applyWlcToMap(mapDummy, weights.globalIndicatorWeights, "default", weights.source),
-      weightAnalysis: weights,
-    };
-  },
+    if (grids && grids.features) {
+      // Map properties for compatibility with MapView and DetailPanel
+      grids.features = grids.features.map((f) => {
+        f.properties.scoreUsed = f.properties.scoreDefault;
+        return f;
+      });
 
-  async getActiveMap() {
-    const defaultWeights = await weightService.getDefaultWeights();
-    const defaultMap = applyWlcToMap(mapDummy, defaultWeights.globalIndicatorWeights, "default", defaultWeights.source);
-    const activeWeights = await weightService.getActiveWeights();
+      const total = grids.features.length;
+      const recommended = grids.features.filter(f => f.properties.suitabilityClass === "Sesuai").length;
+      const sumScore = grids.features.reduce((acc, f) => acc + (f.properties.scoreDefault || 0), 0);
+      const averageScore = total > 0 ? (sumScore / total).toFixed(4) : "0";
 
-    if (activeWeights.mode === "custom-ahp") {
-      return {
-        ...applyWlcToMap(defaultMap, activeWeights.globalIndicatorWeights, "custom", activeWeights.source),
-        weightAnalysis: activeWeights,
+      grids.summary = {
+        total,
+        recommended,
+        averageScore,
+        topGrid: [...grids.features].sort((a, b) => b.properties.scoreDefault - a.properties.scoreDefault)[0]?.properties || null
       };
     }
 
-    return {
-      ...defaultMap,
-      weightAnalysis: defaultWeights,
+    // Map consensus weights to what the client expects
+    const criteriaWeights = {};
+    if (konsensus?.bobot_kriteria) {
+      konsensus.bobot_kriteria.forEach(k => {
+        criteriaWeights[k.kode] = k.bobot * 100;
+      });
+    }
+
+    const globalIndicatorWeights = {};
+    if (konsensus?.bobot_indikator) {
+      konsensus.bobot_indikator.forEach(i => {
+        globalIndicatorWeights[i.kode] = i.bobot_akhir;
+      });
+    }
+
+    grids.weightAnalysis = {
+      mode: "default",
+      source: "Bobot Konsensus AHP dari database pakar",
+      criteriaWeights,
+      globalIndicatorWeights,
     };
+
+    return grids;
   },
 
-  async getCustomAhpMap({ criteriaComparisons, indicatorComparisons }) {
-    const defaultMap = await this.getDefaultMap();
-    const weights = await weightService.buildCustomAhpWeights({ criteriaComparisons, indicatorComparisons });
-
-    return {
-      ...applyWlcToMap(defaultMap, weights.globalIndicatorWeights, "custom", weights.source),
-      weightAnalysis: weights,
-    };
+  async getActiveMap() {
+    return this.getDefaultMap();
   },
 
-  async getMapFromWeights(globalIndicatorWeights, weightSource = "Bobot custom") {
-    const defaultMap = await this.getDefaultMap();
+  async getCustomAhpMap() {
+    // If custom is requested, fallback to default map for consistency
+    return this.getDefaultMap();
+  },
 
-    return applyWlcToMap(defaultMap, globalIndicatorWeights, "custom", weightSource);
+  async getMapFromWeights() {
+    return this.getDefaultMap();
   },
 };

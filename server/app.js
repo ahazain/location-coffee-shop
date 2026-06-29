@@ -1,6 +1,7 @@
 require("dotenv").config();
 const envConfig = require("./src/configs/env-config");
 const express = require("express");
+const cors = require("cors");
 const pakarRoute = require("./src/routes/pakar-route");
 const ahpRoute = require("./src/routes/ahp-route");
 const kriteriaRoute = require("./src/routes/kriteria-route");
@@ -11,6 +12,7 @@ const wlcRoute = require("./src/routes/wlc-route");
 const app = express();
 const port = envConfig.port;
 
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

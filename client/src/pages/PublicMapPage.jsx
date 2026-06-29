@@ -6,16 +6,15 @@ import Card from "../components/common/Card";
 import GridDetailPanel from "../components/map/GridDetailPanel";
 import Legend from "../components/map/Legend";
 import MapView from "../components/map/MapView";
-import { criteria } from "../data/criteria";
 import PublicLayout from "../layouts/PublicLayout";
 import { mapService } from "../services/mapService";
 import { weightService } from "../services/weightService";
-import { formatPercent } from "../utils/ahp";
+import { kriteriaService } from "../services/api/kriteriaService";
 import { getSuitabilityBadgeClass } from "../utils/mapStyle";
 
-function WeightSummary({ analysis }) {
+function WeightSummary({ analysis, criteriaList }) {
   const criteriaWeights = analysis?.criteriaWeights || {};
-  const sortedCriteria = [...criteria].sort((a, b) => Number(criteriaWeights[b.code] || 0) - Number(criteriaWeights[a.code] || 0));
+  const sortedCriteria = [...criteriaList].sort((a, b) => Number(criteriaWeights[b.kode_kriteria] || 0) - Number(criteriaWeights[a.kode_kriteria] || 0));
 
   return (
     <Card className="p-4">
@@ -32,13 +31,13 @@ function WeightSummary({ analysis }) {
 
       <div className="mt-4 space-y-3">
         {sortedCriteria.map((item) => {
-          const value = Number(criteriaWeights[item.code] || 0);
+          const value = Number(criteriaWeights[item.kode_kriteria] || 0);
 
           return (
-            <div key={item.code}>
+            <div key={item.id_kriteria}>
               <div className="mb-1 flex items-center justify-between gap-3 text-xs font-semibold text-stone-600">
-                <span>{item.shortName}</span>
-                <span>{formatPercent(value)}</span>
+                <span>{item.nama_kriteria}</span>
+                <span>{value.toFixed(2)}%</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-stone-100">
                 <div className="h-full rounded-full bg-amber-800" style={{ width: `${Math.min(value, 100)}%` }} />
@@ -54,19 +53,31 @@ function WeightSummary({ analysis }) {
 export default function PublicMapPage() {
   const [geojson, setGeojson] = useState(null);
   const [selectedGrid, setSelectedGrid] = useState(null);
+  const [criteriaList, setCriteriaList] = useState([]);
   const [classFilter, setClassFilter] = useState("Semua");
   const [sortMode, setSortMode] = useState("score-desc");
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    async function loadInitialMap() {
-      setIsLoading(true);
-      const data = await mapService.getActiveMap();
+  async function loadInitialMap() {
+    setIsLoading(true);
+    try {
+      const [data, kriteria] = await Promise.all([
+        mapService.getActiveMap(),
+        kriteriaService.getAll(),
+      ]);
       setGeojson(data);
-      setSelectedGrid(data.summary.topGrid);
+      setCriteriaList(kriteria);
+      if (data?.summary?.topGrid) {
+        setSelectedGrid(data.summary.topGrid);
+      }
+    } catch (err) {
+      console.error("Gagal memuat peta publik:", err);
+    } finally {
       setIsLoading(false);
     }
+  }
 
+  useEffect(() => {
     loadInitialMap();
   }, []);
 
@@ -75,7 +86,9 @@ export default function PublicMapPage() {
     await weightService.resetActiveWeights();
     const data = await mapService.getDefaultMap();
     setGeojson(data);
-    setSelectedGrid(data.summary.topGrid);
+    if (data?.summary?.topGrid) {
+      setSelectedGrid(data.summary.topGrid);
+    }
     setIsLoading(false);
   }
 
@@ -106,20 +119,22 @@ export default function PublicMapPage() {
             <Badge>Peta rekomendasi pelaku usaha</Badge>
             <h1 className="mt-3 text-2xl font-black text-stone-950 md:text-3xl">Peta Rekomendasi Lokasi Coffee Shop</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-500">
-              Halaman ini fokus menampilkan hasil WLC. Pembobotan AHP dipisahkan di halaman khusus supaya pelaku usaha tidak bingung saat melihat peta.
+              Menampilkan hasil evaluasi spasial WLC berbasis grid. Gunakan panel detail untuk meninjau status kriteria dan pembatas lahan.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center sm:min-w-[380px]">
             <div className="rounded-2xl bg-stone-50 p-3">
-              <p className="text-xl font-black text-stone-950">{geojson?.summary.total ?? "-"}</p>
+              <p className="text-xl font-black text-stone-950">{geojson?.summary?.total ?? "-"}</p>
               <p className="text-xs text-stone-500">Grid</p>
             </div>
             <div className="rounded-2xl bg-stone-50 p-3">
-              <p className="text-xl font-black text-stone-950">{geojson?.summary.recommended ?? "-"}</p>
+              <p className="text-xl font-black text-stone-950">{geojson?.summary?.recommended ?? "-"}</p>
               <p className="text-xs text-stone-500">Direkomendasikan</p>
             </div>
             <div className="rounded-2xl bg-stone-50 p-3">
-              <p className="text-xl font-black text-stone-950">{geojson?.summary.averageScore ?? "-"}</p>
+              <p className="text-xl font-black text-stone-950">
+                {geojson?.summary?.averageScore ? parseFloat(geojson.summary.averageScore).toFixed(3) : "-"}
+              </p>
               <p className="text-xs text-stone-500">Rata-rata</p>
             </div>
           </div>
@@ -149,11 +164,11 @@ export default function PublicMapPage() {
               </div>
 
               <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-left text-sm">
+                <table className="w-full text-left text-sm whitespace-nowrap">
                   <thead className="text-xs uppercase tracking-wide text-stone-500">
                     <tr className="border-b border-stone-200">
                       <th className="py-3 pr-4">Grid</th>
-                      <th className="py-3 pr-4">Kelurahan</th>
+                      <th className="py-3 pr-4">Kecamatan / Kelurahan</th>
                       <th className="py-3 pr-4">Kelas</th>
                       <th className="py-3 pr-4 text-right">Skor WLC</th>
                     </tr>
@@ -162,9 +177,11 @@ export default function PublicMapPage() {
                     {gridRows.map((row) => (
                       <tr key={row.gridCode} onClick={() => setSelectedGrid(row)} className="cursor-pointer hover:bg-amber-50/60">
                         <td className="py-3 pr-4 font-bold text-stone-950">{row.gridCode}</td>
-                        <td className="py-3 pr-4 text-stone-600">{row.kelurahan}</td>
+                        <td className="py-3 pr-4 text-stone-600">
+                          {row.kecamatan && row.kelurahan ? `${row.kecamatan} / ${row.kelurahan}` : "Luar Wilayah"}
+                        </td>
                         <td className="py-3 pr-4"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${getSuitabilityBadgeClass(row.suitabilityClass)}`}>{row.suitabilityClass}</span></td>
-                        <td className="py-3 pr-4 text-right font-bold text-stone-950">{row.scoreUsed?.toFixed(3)}</td>
+                        <td className="py-3 pr-4 text-right font-bold text-stone-950">{row.scoreUsed?.toFixed(4)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -178,29 +195,25 @@ export default function PublicMapPage() {
               <div className="flex items-start gap-3">
                 <span className="rounded-2xl bg-green-100 p-2 text-green-700"><MapPinned size={18} /></span>
                 <div>
-                  <h2 className="font-bold text-stone-950">Alur halaman pelaku usaha</h2>
+                  <h2 className="font-bold text-stone-950">Pembobotan Analisis</h2>
                   <p className="mt-2 text-sm leading-6 text-stone-500">
-                    Peta ini memakai bobot aktif. Untuk mengubah prioritas, buka halaman Pembobotan AHP, isi perbandingan, lalu terapkan ke peta.
+                    Peta memuat nilai pembobotan default AHP konsensus pakar dari database.
                   </p>
                 </div>
               </div>
-              <div className="mt-4 grid gap-2">
-                <Button as="link" to="/pembobotan-ahp"><SlidersHorizontal size={16} /> Ubah Bobot AHP</Button>
-                <Button variant="ghost" onClick={resetDefault} disabled={isLoading}><RotateCcw size={16} /> Reset ke Bobot Default</Button>
-              </div>
             </Card>
 
-            <WeightSummary analysis={geojson?.weightAnalysis} />
+            <WeightSummary analysis={geojson?.weightAnalysis} criteriaList={criteriaList} />
             <Legend />
             <GridDetailPanel selectedGrid={selectedGrid} />
 
             <Card className="p-4">
               <div className="flex items-center gap-2 font-semibold text-stone-900">
-                <ArrowDownWideNarrow size={18} /> Kriteria Sistem
+                <ArrowDownWideNarrow size={18} /> Kriteria Terdaftar
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                {criteria.map((item) => (
-                  <span key={item.code} className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700">{item.shortName}</span>
+                {criteriaList.map((item) => (
+                  <span key={item.id_kriteria} className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700">{item.nama_kriteria}</span>
                 ))}
               </div>
             </Card>

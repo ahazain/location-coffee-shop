@@ -3,6 +3,7 @@ const router = express.Router();
 const AHPController = require("../controllers/ahp-controller");
 
 router.post("/calculate", AHPController.calculateAHP);
+router.get("/bobot-konsensus", AHPController.getBobotKonsensus);
 
 router.get("/kriteria/items", AHPController.getKriteriaItems);
 router.post("/kriteria/calculate", AHPController.calculateKriteriaAHP);

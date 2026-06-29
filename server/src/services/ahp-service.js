@@ -89,6 +89,44 @@ class AHPService {
     };
   }
 
+  static async getBobotKonsensus() {
+    const [bobotKriteria, bobotIndikator, pakarList] = await Promise.all([
+      prisma.bobotKriteria.findMany({
+        where: { id_pakar: null },
+        include: { kriteria: { select: { nama_kriteria: true, kode_kriteria: true, urutan: true } } },
+        orderBy: { id_kriteria: "asc" },
+      }),
+      prisma.bobotIndikator.findMany({
+        where: { id_pakar: null },
+        include: { indikator: { select: { nama_indikator: true, kode_indikator: true, id_kriteria: true } } },
+        orderBy: { id_indikator: "asc" },
+      }),
+      prisma.pakar.findMany({
+        where: { is_active: true },
+        select: { id_pakar: true, nama_pakar: true, institusi: true, jabatan: true },
+      }),
+    ]);
+
+    return {
+      total_pakar: pakarList.length,
+      pakar: pakarList,
+      bobot_kriteria: bobotKriteria.map((b) => ({
+        id_kriteria: b.id_kriteria,
+        kode: b.kriteria.kode_kriteria,
+        nama: b.kriteria.nama_kriteria,
+        bobot: Number(b.bobot_kriteria),
+      })),
+      bobot_indikator: bobotIndikator.map((b) => ({
+        id_indikator: b.id_indikator,
+        kode: b.indikator.kode_indikator,
+        nama: b.indikator.nama_indikator,
+        id_kriteria: b.indikator.id_kriteria,
+        bobot_lokal: Number(b.bobot_lokal),
+        bobot_akhir: Number(b.bobot_akhir),
+      })),
+    };
+  }
+
   static async getKriteriaItems() {
     const data = await prisma.kriteria.findMany({
       where: {
