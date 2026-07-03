@@ -220,19 +220,19 @@ class FuzzyService {
           const GeotiffHelper = require("../helpers/geotiff-helper");
           const { noDataValue, pixelValues } = await GeotiffHelper.readPixelsForFuzzy(rawAbsPath);
 
-          const validValues = pixelValues.filter(v => 
-            v !== null && 
-            v !== undefined && 
-            !Number.isNaN(v) && 
-            Number.isFinite(v) && 
+          const validValues = pixelValues.filter(v =>
+            v !== null &&
+            v !== undefined &&
+            !Number.isNaN(v) &&
+            Number.isFinite(v) &&
             (noDataValue === null || v !== noDataValue)
           );
 
           if (validValues.length > 0) {
             validValues.sort((a, b) => a - b);
             const mid = Math.floor(validValues.length / 2);
-            autoMidpoint = validValues.length % 2 !== 0 
-              ? validValues[mid] 
+            autoMidpoint = validValues.length % 2 !== 0
+              ? validValues[mid]
               : (validValues[mid - 1] + validValues[mid]) / 2;
           } else {
             autoMidpoint = 0;
@@ -331,19 +331,19 @@ class FuzzyService {
           const GeotiffHelper = require("../helpers/geotiff-helper");
           const { noDataValue, pixelValues } = await GeotiffHelper.readPixelsForFuzzy(rawAbsPath);
 
-          const validValues = pixelValues.filter(v => 
-            v !== null && 
-            v !== undefined && 
-            !Number.isNaN(v) && 
-            Number.isFinite(v) && 
+          const validValues = pixelValues.filter(v =>
+            v !== null &&
+            v !== undefined &&
+            !Number.isNaN(v) &&
+            Number.isFinite(v) &&
             (noDataValue === null || v !== noDataValue)
           );
 
           if (validValues.length > 0) {
             validValues.sort((a, b) => a - b);
             const mid = Math.floor(validValues.length / 2);
-            autoMidpoint = validValues.length % 2 !== 0 
-              ? validValues[mid] 
+            autoMidpoint = validValues.length % 2 !== 0
+              ? validValues[mid]
               : (validValues[mid - 1] + validValues[mid]) / 2;
           } else {
             autoMidpoint = 0;

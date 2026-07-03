@@ -93,37 +93,144 @@ class AHPService {
     const [bobotKriteria, bobotIndikator, pakarList] = await Promise.all([
       prisma.bobotKriteria.findMany({
         where: { id_pakar: null },
-        include: { kriteria: { select: { nama_kriteria: true, kode_kriteria: true, urutan: true } } },
+        include: {
+          kriteria: {
+            select: {
+              nama_kriteria: true,
+              kode_kriteria: true,
+              urutan: true,
+            },
+          },
+        },
         orderBy: { id_kriteria: "asc" },
       }),
+
       prisma.bobotIndikator.findMany({
         where: { id_pakar: null },
-        include: { indikator: { select: { nama_indikator: true, kode_indikator: true, id_kriteria: true } } },
+        include: {
+          indikator: {
+            select: {
+              nama_indikator: true,
+              kode_indikator: true,
+              id_kriteria: true,
+            },
+          },
+        },
         orderBy: { id_indikator: "asc" },
       }),
+
       prisma.pakar.findMany({
         where: { is_active: true },
-        select: { id_pakar: true, nama_pakar: true, institusi: true, jabatan: true },
+        select: {
+          id_pakar: true,
+          nama_pakar: true,
+          institusi: true,
+          jabatan: true,
+        },
+        orderBy: { id_pakar: "asc" },
       }),
     ]);
 
+    const activePakarIds = pakarList.map((pakar) => pakar.id_pakar);
+
+    const bobotIndikatorPakar =
+      activePakarIds.length > 0
+        ? await prisma.bobotIndikator.findMany({
+          where: {
+            id_pakar: {
+              in: activePakarIds,
+            },
+          },
+          include: {
+            pakar: {
+              select: {
+                id_pakar: true,
+                nama_pakar: true,
+                institusi: true,
+                jabatan: true,
+              },
+            },
+            indikator: {
+              select: {
+                id_indikator: true,
+                nama_indikator: true,
+                kode_indikator: true,
+                id_kriteria: true,
+              },
+            },
+          },
+          orderBy: [
+            {
+              id_indikator: "asc",
+            },
+            {
+              id_pakar: "asc",
+            },
+          ],
+        })
+        : [];
+
+    const pakarWeightMap = new Map();
+
+    bobotIndikatorPakar.forEach((item) => {
+      const idIndikator = item.id_indikator;
+
+      if (!pakarWeightMap.has(idIndikator)) {
+        pakarWeightMap.set(idIndikator, []);
+      }
+
+      pakarWeightMap.get(idIndikator).push({
+        id_pakar: item.id_pakar,
+        nama_pakar: item.pakar?.nama_pakar || "-",
+        institusi: item.pakar?.institusi || null,
+        jabatan: item.pakar?.jabatan || null,
+        bobot_lokal: Number(item.bobot_lokal),
+        bobot_akhir: Number(item.bobot_akhir),
+      });
+    });
+
     return {
       total_pakar: pakarList.length,
+
       pakar: pakarList,
+
       bobot_kriteria: bobotKriteria.map((b) => ({
         id_kriteria: b.id_kriteria,
         kode: b.kriteria.kode_kriteria,
         nama: b.kriteria.nama_kriteria,
         bobot: Number(b.bobot_kriteria),
       })),
-      bobot_indikator: bobotIndikator.map((b) => ({
-        id_indikator: b.id_indikator,
-        kode: b.indikator.kode_indikator,
-        nama: b.indikator.nama_indikator,
-        id_kriteria: b.indikator.id_kriteria,
-        bobot_lokal: Number(b.bobot_lokal),
-        bobot_akhir: Number(b.bobot_akhir),
-      })),
+
+      bobot_indikator: bobotIndikator.map((b) => {
+        const weightsForIndicator = pakarWeightMap.get(b.id_indikator) || [];
+
+        const weightsByPakar = new Map(
+          weightsForIndicator.map((weight) => [weight.id_pakar, weight]),
+        );
+
+        return {
+          id_indikator: b.id_indikator,
+          kode: b.indikator.kode_indikator,
+          nama: b.indikator.nama_indikator,
+          id_kriteria: b.indikator.id_kriteria,
+
+          bobot_lokal: Number(b.bobot_lokal),
+          bobot_akhir: Number(b.bobot_akhir),
+
+          pakar_weights: pakarList.map((pakar) => {
+            const found = weightsByPakar.get(pakar.id_pakar);
+
+            return {
+              id_pakar: pakar.id_pakar,
+              nama_pakar: pakar.nama_pakar,
+              institusi: pakar.institusi,
+              jabatan: pakar.jabatan,
+              bobot_lokal: found ? found.bobot_lokal : null,
+              bobot_akhir: found ? found.bobot_akhir : null,
+            };
+          }),
+        };
+      }),
     };
   }
 
@@ -220,6 +327,7 @@ class AHPService {
     const pakar = await prisma.pakar.findUnique({
       where: { id_pakar: parsedIdPakar },
     });
+
     if (!pakar) {
       throw new NotFoundError("Pakar tidak ditemukan.");
     }
@@ -251,7 +359,7 @@ class AHPService {
 
     await prisma.$transaction(async (tx) => {
       await tx.ahpKriteriaMatrix.deleteMany({
-        where: { id_pakar: parsedIdPakar }
+        where: { id_pakar: parsedIdPakar },
       });
 
       await tx.ahpKriteriaMatrix.createMany({
@@ -291,7 +399,6 @@ class AHPService {
       });
     });
 
-    // Otomatis hitung ulang bobot konsensus rata-rata kriteria
     await this.recalculateConsensusKriteriaAHP();
 
     return {
@@ -431,6 +538,7 @@ class AHPService {
     const pakar = await prisma.pakar.findUnique({
       where: { id_pakar: parsedIdPakar },
     });
+
     if (!pakar) {
       throw new NotFoundError("Pakar tidak ditemukan.");
     }
@@ -523,7 +631,6 @@ class AHPService {
       });
     });
 
-    // Otomatis hitung ulang bobot konsensus rata-rata kriteria & indikator untuk kriteria ini
     await this.recalculateConsensusKriteriaAHP();
     await this.recalculateConsensusIndikatorAHP(parsedIdKriteria);
 
@@ -545,55 +652,66 @@ class AHPService {
   static async recalculateConsensusKriteriaAHP() {
     const kriteriaList = await prisma.kriteria.findMany({
       where: { is_active: true },
-      select: { id_kriteria: true }
+      select: { id_kriteria: true },
     });
 
     const activePakar = await prisma.pakar.findMany({
       where: { is_active: true },
-      select: { id_pakar: true }
+      select: { id_pakar: true },
     });
-    const pakarIds = activePakar.map(p => p.id_pakar);
+
+    const pakarIds = activePakar.map((p) => p.id_pakar);
 
     if (pakarIds.length === 0) return;
 
     const consensusWeights = [];
+
     for (const crit of kriteriaList) {
       const weights = await prisma.bobotKriteria.findMany({
         where: {
           id_kriteria: crit.id_kriteria,
-          id_pakar: { in: pakarIds }
+          id_pakar: { in: pakarIds },
         },
-        select: { bobot_kriteria: true }
+        select: { bobot_kriteria: true },
       });
 
       if (weights.length > 0) {
-        const sum = weights.reduce((acc, curr) => acc + Number(curr.bobot_kriteria), 0);
+        const sum = weights.reduce(
+          (acc, curr) => acc + Number(curr.bobot_kriteria),
+          0,
+        );
+
         const avg = sum / weights.length;
+
         consensusWeights.push({
           id_kriteria: crit.id_kriteria,
-          bobot_kriteria: avg
+          bobot_kriteria: avg,
         });
       }
     }
 
-    const totalConsensus = consensusWeights.reduce((acc, c) => acc + c.bobot_kriteria, 0);
+    const totalConsensus = consensusWeights.reduce(
+      (acc, c) => acc + c.bobot_kriteria,
+      0,
+    );
+
     if (totalConsensus > 0) {
-      consensusWeights.forEach(c => {
+      consensusWeights.forEach((c) => {
         c.bobot_kriteria = c.bobot_kriteria / totalConsensus;
       });
     }
 
     await prisma.$transaction(async (tx) => {
       await tx.bobotKriteria.deleteMany({
-        where: { id_pakar: null }
+        where: { id_pakar: null },
       });
 
       await tx.bobotKriteria.createMany({
-        data: consensusWeights.map(c => ({
+        data: consensusWeights.map((c) => ({
           id_pakar: null,
           id_kriteria: c.id_kriteria,
-          bobot_kriteria: c.bobot_kriteria
-        }))
+          bobot_kriteria: c.bobot_kriteria,
+        })),
       });
     });
   }
@@ -601,48 +719,62 @@ class AHPService {
   static async recalculateConsensusIndikatorAHP(idKriteria) {
     const indikatorList = await prisma.indikator.findMany({
       where: { id_kriteria: idKriteria, is_active: true },
-      select: { id_indikator: true }
+      select: { id_indikator: true },
     });
 
     const activePakar = await prisma.pakar.findMany({
       where: { is_active: true },
-      select: { id_pakar: true }
+      select: { id_pakar: true },
     });
-    const pakarIds = activePakar.map(p => p.id_pakar);
+
+    const pakarIds = activePakar.map((p) => p.id_pakar);
 
     if (pakarIds.length === 0) return;
 
     const consensusKriteria = await prisma.bobotKriteria.findFirst({
       where: {
         id_pakar: null,
-        id_kriteria: idKriteria
-      }
+        id_kriteria: idKriteria,
+      },
     });
-    const bobotKriteriaConsensus = consensusKriteria ? Number(consensusKriteria.bobot_kriteria) : 0;
+
+    const bobotKriteriaConsensus = consensusKriteria
+      ? Number(consensusKriteria.bobot_kriteria)
+      : 0;
 
     const consensusIndikatorWeights = [];
+
     for (const ind of indikatorList) {
       const weights = await prisma.bobotIndikator.findMany({
         where: {
           id_indikator: ind.id_indikator,
-          id_pakar: { in: pakarIds }
+          id_pakar: { in: pakarIds },
         },
-        select: { bobot_lokal: true }
+        select: { bobot_lokal: true },
       });
 
       if (weights.length > 0) {
-        const sum = weights.reduce((acc, curr) => acc + Number(curr.bobot_lokal), 0);
+        const sum = weights.reduce(
+          (acc, curr) => acc + Number(curr.bobot_lokal),
+          0,
+        );
+
         const avgLokal = sum / weights.length;
+
         consensusIndikatorWeights.push({
           id_indikator: ind.id_indikator,
-          bobot_lokal: avgLokal
+          bobot_lokal: avgLokal,
         });
       }
     }
 
-    const totalLokal = consensusIndikatorWeights.reduce((acc, w) => acc + w.bobot_lokal, 0);
+    const totalLokal = consensusIndikatorWeights.reduce(
+      (acc, w) => acc + w.bobot_lokal,
+      0,
+    );
+
     if (totalLokal > 0) {
-      consensusIndikatorWeights.forEach(w => {
+      consensusIndikatorWeights.forEach((w) => {
         w.bobot_lokal = w.bobot_lokal / totalLokal;
         w.bobot_akhir = w.bobot_lokal * bobotKriteriaConsensus;
       });
@@ -652,17 +784,19 @@ class AHPService {
       await tx.bobotIndikator.deleteMany({
         where: {
           id_pakar: null,
-          id_indikator: { in: indikatorList.map(i => i.id_indikator) }
-        }
+          id_indikator: {
+            in: indikatorList.map((i) => i.id_indikator),
+          },
+        },
       });
 
       await tx.bobotIndikator.createMany({
-        data: consensusIndikatorWeights.map(w => ({
+        data: consensusIndikatorWeights.map((w) => ({
           id_pakar: null,
           id_indikator: w.id_indikator,
           bobot_lokal: w.bobot_lokal,
-          bobot_akhir: w.bobot_akhir
-        }))
+          bobot_akhir: w.bobot_akhir,
+        })),
       });
     });
   }

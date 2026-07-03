@@ -11,6 +11,13 @@ export const geotiffService = {
     return await apiClient.postForm(`/geotiff/indikator/${id_indikator}/raw`, formData);
   },
 
+  async updateRaw(id_indikator, file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return await apiClient.putForm(`/geotiff/indikator/${id_indikator}/raw`, formData);
+  },
+
+
   async listByIndikator(id_indikator) {
     return await apiClient.get(`/geotiff/indikator/${id_indikator}`);
   },

@@ -126,6 +126,7 @@ class WlcService {
       const rawDataObj = {
         id_indikator: ind.id_indikator,
         kode_indikator: ind.kode_indikator,
+        jenis: ind.jenis_indikator,
         pixelValues: rawPixels.pixelValues,
         width: rawPixels.width,
         height: rawPixels.height,

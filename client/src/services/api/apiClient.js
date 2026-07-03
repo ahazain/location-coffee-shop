@@ -37,6 +37,15 @@ export const apiClient = {
     return this.handleResponse(response);
   },
 
+  async putForm(endpoint, formData) {
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      method: "PUT",
+      body: formData,
+    });
+    return this.handleResponse(response);
+  },
+
+
   async handleResponse(response) {
     const json = await response.json();
     if (!response.ok) {

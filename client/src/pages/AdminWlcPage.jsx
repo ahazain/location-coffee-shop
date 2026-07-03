@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Calculator, CheckCircle2, RefreshCcw, Sigma } from "lucide-react";
+import { AlertTriangle, Calculator, CheckCircle2, RefreshCcw } from "lucide-react";
 import Badge from "../components/common/Badge";
 import Button from "../components/common/Button";
 import Card from "../components/common/Card";
+import Toast from "../components/common/Toast";
+import ConfirmationModal from "../components/common/ConfirmationModal";
 import AdminLayout from "../layouts/AdminLayout";
 import { wlcService } from "../services/api/wlcService";
 import { ahpService } from "../services/api/ahpService";
@@ -13,10 +15,14 @@ export default function AdminWlcPage() {
   const [grids, setGrids] = useState(null);
   const [konsensus, setKonsensus] = useState(null);
   const [indikatorList, setIndikatorList] = useState([]);
-  
+
   const [loading, setLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
-  const [message, setMessage] = useState(null);
+  const [sortDirection, setSortDirection] = useState("desc"); // "desc" = tertinggi dulu, "asc" = terendah dulu
+
+  // UI States (disamakan dengan AdminDatasetsPage)
+  const [toast, setToast] = useState(null);
+  const [modalConfig, setModalConfig] = useState(null); // { isOpen, title, message, onConfirm, variant }
 
   const loadData = async () => {
     try {
@@ -32,7 +38,7 @@ export default function AdminWlcPage() {
       setKonsensus(ahpData);
       setIndikatorList(indData);
     } catch (err) {
-      setMessage({ type: "error", text: `Gagal memuat data: ${err.message}` });
+      setToast({ type: "error", message: `Gagal memuat data: ${err.message}` });
     } finally {
       setLoading(false);
     }
@@ -64,31 +70,59 @@ export default function AdminWlcPage() {
     if (!topGrid || !konsensus?.bobot_indikator) return [];
 
     const scores = topGrid.properties.indicatorScores || {};
-    return konsensus.bobot_indikator.map((bobotInd) => {
+
+    const rows = konsensus.bobot_indikator.map((bobotInd) => {
       const rawVal = scores[bobotInd.kode] ?? 0;
-      // Note: backend does the fuzzy calculation, here we just show what we have.
-      // Since breakdown is contribution = weight * fuzzy_value, and the database stores raw indicatorScores,
-      // we can estimate or display weight and the raw value, or query the backend's details if available.
-      // Let's display the local weight and the raw indicator value.
+
+      // Ambil nama indikator dari daftar indikator (indikatorList) berdasarkan kode,
+      // fallback ke nama yang mungkin sudah ada di data konsensus.
+      const matchedIndikator = indikatorList.find(
+        (ind) => ind.kode_indikator === bobotInd.kode || ind.kode === bobotInd.kode
+      );
+      const indicatorName =
+        matchedIndikator?.nama_indikator ||
+        matchedIndikator?.nama ||
+        bobotInd.name ||
+        bobotInd.kode;
+
       return {
         indicatorCode: bobotInd.kode,
-        indicatorName: bobotInd.name,
+        indicatorName,
         rawValue: rawVal,
         weight: bobotInd.bobot_akhir,
-        contribution: (rawVal * bobotInd.bobot_akhir).toFixed(4),
+        contribution: rawVal * bobotInd.bobot_akhir,
       };
     });
-  }, [topGrid, konsensus]);
 
-  async function handleRunWlc() {
-    setMessage(null);
+    // Urutkan berdasarkan nilai asli spasial (skor), sesuai arah yang dipilih pengguna.
+    return rows.sort((a, b) =>
+      sortDirection === "desc" ? b.rawValue - a.rawValue : a.rawValue - b.rawValue
+    );
+  }, [topGrid, konsensus, indikatorList, sortDirection]);
+
+  // Klik tombol "Hitung WLC Ulang" -> tampilkan modal konfirmasi dulu
+  function handleRunWlcClick() {
+    setModalConfig({
+      isOpen: true,
+      title: "Konfirmasi Kalkulasi WLC",
+      message: activeWlc
+        ? "Apakah Anda yakin ingin menghitung ulang WLC? Hasil versi sebelumnya akan digantikan dengan versi baru berdasarkan data fuzzy dan bobot AHP terkini."
+        : "Apakah Anda yakin ingin menjalankan kalkulasi WLC untuk pertama kali berdasarkan data fuzzy dan bobot AHP saat ini?",
+      variant: "warning",
+      onConfirm: executeRunWlc,
+    });
+  }
+
+  // Eksekusi kalkulasi WLC setelah konfirmasi
+  async function executeRunWlc() {
+    setModalConfig(null);
     setIsRunning(true);
     try {
       await wlcService.calculate();
-      setMessage({ type: "success", text: "Kalkulasi WLC berhasil dijalankan dan disimpan!" });
+      setToast({ type: "success", message: "Successfully toasted! (Kalkulasi WLC berhasil dijalankan dan disimpan)" });
       await loadData();
     } catch (err) {
-      setMessage({ type: "error", text: err.message });
+      setToast({ type: "error", message: err.message || "Gagal menjalankan kalkulasi WLC." });
     } finally {
       setIsRunning(false);
     }
@@ -127,15 +161,6 @@ export default function AdminWlcPage() {
         </div>
       </Card>
 
-      {message && (
-        <div className={message.type === "success" 
-          ? "mb-5 rounded-3xl border border-green-200 bg-green-50 p-4 text-sm leading-6 text-green-800" 
-          : "mb-5 rounded-3xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-800"
-        }>
-          {message.text}
-        </div>
-      )}
-
       <div className="mb-5 grid gap-4 lg:grid-cols-[1fr_420px]">
         <Card className="p-5">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
@@ -145,12 +170,12 @@ export default function AdminWlcPage() {
               </Badge>
               <h2 className="mt-3 text-xl font-black text-stone-950">Kesiapan Kalkulasi WLC</h2>
               <p className="mt-2 text-sm leading-6 text-stone-500">
-                {activeWlc 
-                  ? `Hasil WLC terakhir aktif sejak ${new Date(activeWlc.created_at).toLocaleString("id-ID")}` 
+                {activeWlc
+                  ? `Hasil WLC terakhir aktif sejak ${new Date(activeWlc.created_at).toLocaleString("id-ID")}`
                   : "Silakan tekan tombol kalkulasi untuk memproses skor kesesuaian grid berdasarkan data spasial terbaru."}
               </p>
             </div>
-            <Button onClick={handleRunWlc} disabled={!canRun || isRunning}>
+            <Button onClick={handleRunWlcClick} disabled={!canRun || isRunning}>
               <RefreshCcw size={16} /> {isRunning ? "Menghitung..." : "Hitung WLC Ulang"}
             </Button>
           </div>
@@ -197,34 +222,6 @@ export default function AdminWlcPage() {
         </Card>
       </div>
 
-      <div className="mb-5 grid gap-4 md:grid-cols-3">
-        <Card className="p-5">
-          <span className="inline-flex rounded-2xl bg-amber-100 p-3 text-amber-800"><Sigma /></span>
-          <p className="mt-4 text-sm text-stone-500">Grid Terbaik</p>
-          <h3 className="text-2xl font-black text-stone-950">
-            {topGrid?.properties.gridCode || "-"}
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-stone-500">
-            Skor WLC: {topGrid?.properties.scoreDefault?.toFixed(4) || "-"} 
-            {topGrid?.properties.kelurahan ? ` di Kel. ${topGrid.properties.kelurahan}` : ""}
-          </p>
-        </Card>
-        <Card className="p-5">
-          <span className="inline-flex rounded-2xl bg-amber-100 p-3 text-amber-800"><CheckCircle2 /></span>
-          <p className="mt-4 text-sm text-stone-500">Grid Kesesuaian Tinggi</p>
-          <h3 className="text-2xl font-black text-stone-950">{totalGridRecommended}</h3>
-          <p className="mt-2 text-sm leading-6 text-stone-500">Jumlah grid dengan kelas suitability &quot;Sesuai&quot;.</p>
-        </Card>
-        <Card className="p-5">
-          <span className="inline-flex rounded-2xl bg-amber-100 p-3 text-amber-800"><RefreshCcw /></span>
-          <p className="mt-4 text-sm text-stone-500">Versi Analisis Run</p>
-          <h3 className="text-lg font-black text-stone-950">
-            {activeWlc ? `Versi ${activeWlc.versi}` : "Belum Dihasilkan"}
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-stone-500">Setiap kalkulasi baru menaikkan nomor versi hasil analisis.</p>
-        </Card>
-      </div>
-
       <div className="mb-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <Card className="p-5">
           <h2 className="text-lg font-bold text-stone-950">Klasifikasi Kesesuaian Lahan</h2>
@@ -265,9 +262,18 @@ export default function AdminWlcPage() {
 
       {topGrid && (
         <Card className="overflow-hidden p-0">
-          <div className="border-b border-stone-200 p-5">
-            <h2 className="text-lg font-bold text-stone-950">Kontribusi Nilai pada Grid Terbaik ({topGrid.properties.gridCode})</h2>
-            <p className="mt-1 text-sm text-stone-500">Menampilkan nilai asli masing-masing indikator pada grid dengan skor WLC tertinggi.</p>
+          <div className="flex flex-col justify-between gap-3 border-b border-stone-200 p-5 sm:flex-row sm:items-center">
+            <div>
+              <h2 className="text-lg font-bold text-stone-950">Kontribusi Nilai pada Grid Terbaik ({topGrid.properties.gridCode})</h2>
+              <p className="mt-1 text-sm text-stone-500">Menampilkan nilai asli masing-masing indikator pada grid dengan skor WLC tertinggi.</p>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => setSortDirection((prev) => (prev === "desc" ? "asc" : "desc"))}
+            >
+              <RefreshCcw size={16} />
+              {sortDirection === "desc" ? "Skor Tertinggi" : "Skor Terendah"}
+            </Button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -298,6 +304,27 @@ export default function AdminWlcPage() {
             </table>
           </div>
         </Card>
+      )}
+
+      {/* Confirmation Modal */}
+      {modalConfig && (
+        <ConfirmationModal
+          isOpen={modalConfig.isOpen}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          variant={modalConfig.variant}
+          onConfirm={modalConfig.onConfirm}
+          onCancel={() => setModalConfig(null)}
+        />
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </AdminLayout>
   );

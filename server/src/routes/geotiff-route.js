@@ -14,6 +14,14 @@ router.post(
   GeotiffController.uploadIndikatorRaw,
 );
 
+// PUT /geotiff/indikator/:id_indikator/raw (Update & hapus data/storage lama)
+router.put(
+  "/indikator/:id_indikator/raw",
+  uploadGeotiff.single("file"),
+  GeotiffController.updateIndikatorRaw,
+);
+
+
 // ─────────────────────────────────────────────
 // List & Get Raster Layers
 // ─────────────────────────────────────────────

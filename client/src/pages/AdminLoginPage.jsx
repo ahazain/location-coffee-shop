@@ -4,8 +4,6 @@ import { Coffee, LockKeyhole, UserRound } from "lucide-react";
 import Badge from "../components/common/Badge";
 import Button from "../components/common/Button";
 import Card from "../components/common/Card";
-import { adminService } from "../services/adminService";
-
 export default function AdminLoginPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: "admin", password: "admin123" });
@@ -13,16 +11,24 @@ export default function AdminLoginPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    const result = await adminService.login(form);
+    const username = form.username?.trim();
+    const password = form.password?.trim();
 
-    if (!result.ok) {
-      setErrorMessage(result.message);
+    if (!username || !password) {
+      setErrorMessage("Username dan password wajib diisi.");
       return;
     }
 
-    localStorage.setItem("admin_token", result.token);
-    localStorage.setItem("admin_profile", JSON.stringify(result.profile));
-    navigate("/admin/dashboard");
+    if (username === "admin" && password === "admin123") {
+      localStorage.setItem("admin_token", "dummy-admin-token");
+      localStorage.setItem("admin_profile", JSON.stringify({
+        name: "Admin Sistem Lokasi Coffee Shop",
+        role: "Administrator",
+      }));
+      navigate("/admin/dashboard");
+    } else {
+      setErrorMessage("Username atau password salah.");
+    }
   }
 
   return (

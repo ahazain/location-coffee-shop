@@ -35,6 +35,38 @@ class GeotiffController {
     }
   }
 
+  static async updateIndikatorRaw(req, res) {
+    let shouldDeleteUploadedFile = true;
+
+    try {
+      const { id_indikator } = req.params;
+
+      const data = await GeotiffService.updateIndikatorRaw({
+        id_indikator,
+        file: req.file,
+      });
+
+      shouldDeleteUploadedFile = false;
+
+      ResponseHelper.success(
+        res,
+        data,
+        "Update GeoTIFF indikator berhasil. Raster lama dihapus.",
+      );
+    } catch (error) {
+      if (
+        shouldDeleteUploadedFile &&
+        req.file &&
+        req.file.path &&
+        fs.existsSync(req.file.path)
+      ) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      ResponseHelper.error(res, error);
+    }
+  }
+
   // ─────────────────────────────────────────────
   // List & Get Raster Layers
   // ─────────────────────────────────────────────

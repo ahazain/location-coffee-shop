@@ -126,6 +126,130 @@ class GeotiffService {
     return result;
   }
 
+  static async updateIndikatorRaw({ id_indikator, file }) {
+    if (!file) {
+      throw new BadRequestError("File GeoTIFF wajib diunggah.");
+    }
+
+    GeotiffHelper.validateExtension(file);
+
+    const parsedIdIndikator = RasterDbUtil.parseId(id_indikator, "ID indikator");
+
+    const metadata = await GeotiffHelper.readMetadata(file.path);
+    const storedPath = RasterDbUtil.normalizeStoredPath(file.path);
+
+    // 1. Ambil daftar raster yang ada untuk indikator ini sebelum dihapus
+    const existingRasters = await prisma.rasterLayer.findMany({
+      where: {
+        id_indikator: parsedIdIndikator,
+      },
+    });
+
+    const result = await prisma.$transaction(async (tx) => {
+      // LANGKAH 1: Validasi keberadaan indikator di database
+      const indikator = await tx.indikator.findUnique({
+        where: {
+          id_indikator: parsedIdIndikator,
+        },
+        select: {
+          id_indikator: true,
+          kode_indikator: true,
+          nama_indikator: true,
+          jenis_indikator: true,
+          is_active: true,
+        },
+      });
+
+      if (!indikator) {
+        throw new NotFoundError("Indikator tidak ditemukan.");
+      }
+
+      // LANGKAH 2: Validasi status keaktifan indikator
+      if (!indikator.is_active) {
+        throw new BadRequestError("Indikator tidak aktif.");
+      }
+
+      // LANGKAH 3: Hapus semua raster lama milik indikator ini dari DB
+      await tx.rasterLayer.deleteMany({
+        where: {
+          id_indikator: parsedIdIndikator,
+        },
+      });
+
+      const tipeRaster = "raw";
+      const version = 1; // Mulai dari 1 lagi karena yang lama sudah dihapus
+
+      // LANGKAH 4: Masukkan data metadata GeoTIFF baru yang diunggah ke database (is_active = true)
+      const rasterLayer = await tx.rasterLayer.create({
+        data: {
+          id_indikator: parsedIdIndikator,
+          tipe_raster: tipeRaster,
+          file_path: storedPath,
+          original_filename: file.originalname,
+          crs: metadata.crs,
+          resolution_x: metadata.resolution_x,
+          resolution_y: metadata.resolution_y,
+          width: metadata.width,
+          height: metadata.height,
+          band_count: metadata.band_count,
+          extent: metadata.extent,
+          min_value: metadata.min_value,
+          max_value: metadata.max_value,
+          mean_value: metadata.mean_value,
+          std_value: metadata.std_value,
+          nodata_value: metadata.nodata_value,
+          jumlah_pixel: metadata.jumlah_pixel,
+          jumlah_pixel_valid: metadata.jumlah_pixel_valid,
+          jumlah_pixel_nodata: metadata.jumlah_pixel_nodata,
+          versi: version,
+          is_active: true,
+        },
+      });
+
+      return {
+        id_raster_layer: rasterLayer.id_raster_layer,
+        id_indikator: indikator.id_indikator,
+        kode_indikator: indikator.kode_indikator,
+        nama_indikator: indikator.nama_indikator,
+        tipe_raster: rasterLayer.tipe_raster,
+        file_path: rasterLayer.file_path,
+        original_filename: rasterLayer.original_filename,
+        versi: rasterLayer.versi,
+        is_active: rasterLayer.is_active,
+        metadata: {
+          crs: rasterLayer.crs,
+          resolution_x: rasterLayer.resolution_x,
+          resolution_y: rasterLayer.resolution_y,
+          width: rasterLayer.width,
+          height: rasterLayer.height,
+          band_count: rasterLayer.band_count,
+          extent: rasterLayer.extent,
+          min_value: rasterLayer.min_value,
+          max_value: rasterLayer.max_value,
+          mean_value: rasterLayer.mean_value,
+          std_value: rasterLayer.std_value,
+          nodata_value: rasterLayer.nodata_value,
+          jumlah_pixel: rasterLayer.jumlah_pixel,
+          jumlah_pixel_valid: rasterLayer.jumlah_pixel_valid,
+          jumlah_pixel_nodata: rasterLayer.jumlah_pixel_nodata,
+        },
+      };
+    });
+
+    // LANGKAH 5: Hapus berkas fisik raster lama dari penyimpanan jika transaksi DB sukses
+    for (const oldRaster of existingRasters) {
+      const absolutePath = path.isAbsolute(oldRaster.file_path)
+        ? oldRaster.file_path
+        : path.join(process.cwd(), oldRaster.file_path);
+
+      if (fs.existsSync(absolutePath)) {
+        fs.unlinkSync(absolutePath);
+      }
+    }
+
+    return result;
+  }
+
   // ─────────────────────────────────────────────
   // List & Get Raster Layers
   // ─────────────────────────────────────────────
