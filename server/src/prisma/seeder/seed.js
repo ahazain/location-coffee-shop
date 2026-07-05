@@ -17,268 +17,189 @@ const adminUsers = [
 
 const kriteriaData = [
   {
-    kode_kriteria: "zona_fungsional_kota",
+    id_kriteria: 1,
     nama_kriteria: "Zona Fungsional Kota",
     deskripsi:
       "Kriteria yang menggambarkan fungsi kawasan kota berdasarkan layanan, aktivitas, dan hunian.",
-    urutan: 1,
   },
   {
-    kode_kriteria: "permintaan_pasar",
+    id_kriteria: 2,
     nama_kriteria: "Permintaan Pasar",
     deskripsi:
       "Kriteria yang menggambarkan potensi permintaan pasar berdasarkan pusat kegiatan, pendidikan, kantor, jasa keuangan, dan bisnis.",
-    urutan: 2,
   },
   {
-    kode_kriteria: "kondisi_ekonomi",
+    id_kriteria: 3,
     nama_kriteria: "Kondisi Ekonomi",
     deskripsi:
       "Kriteria yang menggambarkan kondisi ekonomi wilayah melalui intensitas cahaya malam dan kepadatan populasi.",
-    urutan: 3,
   },
   {
-    kode_kriteria: "aksesibilitas_transportasi",
+    id_kriteria: 4,
     nama_kriteria: "Aksesibilitas Transportasi",
     deskripsi:
       "Kriteria yang menggambarkan kemudahan akses lokasi berdasarkan jalan utama, simpul transportasi, dan simpang jalan.",
-    urutan: 4,
   },
   {
-    kode_kriteria: "persaingan",
+    id_kriteria: 5,
     nama_kriteria: "Persaingan",
     deskripsi:
       "Kriteria yang menggambarkan tingkat persaingan berdasarkan keberadaan coffee shop eksisting.",
-    urutan: 5,
   },
   {
-    kode_kriteria: "pembatas_lahan",
+    id_kriteria: 6,
     nama_kriteria: "Pembatas Lahan",
     deskripsi:
       "Kriteria yang menggambarkan area pembatas atau area yang tidak layak untuk rekomendasi lokasi.",
-    urutan: 6,
   },
 ];
 
 const indikatorData = [
   // 1. Zona Fungsional Kota
   {
-    kode_kriteria: "zona_fungsional_kota",
-    kode_indikator: "kepadatan_layanan_makan_non_coffee",
+    id_indikator: 1,
+    id_kriteria: 1,
     nama_indikator: "Kepadatan Layanan Makan Non-Coffee",
     satuan: "unit/km2",
-    jenis_indikator: "benefit",
     tipe_nilai: "kepadatan",
-    sumber_data: "Hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Menghitung kepadatan layanan makan non-coffee pada setiap grid.",
     deskripsi:
       "Semakin tinggi kepadatan layanan makan non-coffee, semakin menunjukkan kawasan aktif secara komersial.",
-    urutan: 1,
   },
   {
-    kode_kriteria: "zona_fungsional_kota",
-    kode_indikator: "kepadatan_layanan_olahraga_rekreasi",
+    id_indikator: 2,
+    id_kriteria: 1,
     nama_indikator: "Kepadatan Layanan Olahraga dan Rekreasi",
     satuan: "unit/km2",
-    jenis_indikator: "benefit",
     tipe_nilai: "kepadatan",
-    sumber_data: "Hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Menghitung kepadatan fasilitas olahraga dan rekreasi pada setiap grid.",
     deskripsi:
       "Semakin tinggi kepadatan layanan olahraga dan rekreasi, semakin tinggi potensi aktivitas masyarakat.",
-    urutan: 2,
   },
   {
-    kode_kriteria: "zona_fungsional_kota",
-    kode_indikator: "kepadatan_hunian",
+    id_indikator: 3,
+    id_kriteria: 1,
     nama_indikator: "Kepadatan Hunian",
     satuan: "unit/km2",
-    jenis_indikator: "benefit",
     tipe_nilai: "kepadatan",
-    sumber_data: "Hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Menghitung kepadatan hunian atau area permukiman pada setiap grid.",
     deskripsi:
       "Semakin tinggi kepadatan hunian, semakin besar potensi konsumen sekitar.",
-    urutan: 3,
   },
 
   // 2. Permintaan Pasar
   {
-    kode_kriteria: "permintaan_pasar",
-    kode_indikator: "kedekatan_pusat_belanja",
+    id_indikator: 4,
+    id_kriteria: 2,
     nama_indikator: "Kedekatan Pusat Belanja",
     satuan: "meter",
-    jenis_indikator: "cost",
     tipe_nilai: "jarak",
-    sumber_data: "Hasil preprocessing QGIS",
-    metode_pengolahan: "Menghitung jarak terdekat dari grid ke pusat belanja.",
     deskripsi:
       "Semakin dekat dengan pusat belanja, semakin tinggi potensi permintaan pasar.",
-    urutan: 1,
   },
   {
-    kode_kriteria: "permintaan_pasar",
-    kode_indikator: "kepadatan_kampus_fasilitas_pendidikan",
+    id_indikator: 5,
+    id_kriteria: 2,
     nama_indikator: "Kepadatan Kampus dan Fasilitas Pendidikan",
     satuan: "unit/km2",
-    jenis_indikator: "benefit",
     tipe_nilai: "kepadatan",
-    sumber_data: "Hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Menghitung kepadatan kampus dan fasilitas pendidikan pada setiap grid.",
     deskripsi:
       "Semakin tinggi kepadatan kampus dan fasilitas pendidikan, semakin besar potensi pasar pelajar dan mahasiswa.",
-    urutan: 2,
   },
   {
-    kode_kriteria: "permintaan_pasar",
-    kode_indikator: "kepadatan_kantor_jasa_keuangan_bisnis",
+    id_indikator: 6,
+    id_kriteria: 2,
     nama_indikator: "Kepadatan Kantor, Jasa Keuangan, dan Bisnis",
     satuan: "unit/km2",
-    jenis_indikator: "benefit",
     tipe_nilai: "kepadatan",
-    sumber_data: "Hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Menghitung kepadatan kantor, jasa keuangan, dan bisnis pada setiap grid.",
     deskripsi:
       "Semakin tinggi kepadatan kantor dan aktivitas bisnis, semakin besar potensi konsumen pekerja.",
-    urutan: 3,
   },
 
   // 3. Kondisi Ekonomi
   {
-    kode_kriteria: "kondisi_ekonomi",
-    kode_indikator: "intensitas_cahaya_malam",
+    id_indikator: 7,
+    id_kriteria: 3,
     nama_indikator: "Intensitas Cahaya Malam",
     satuan: "indeks",
-    jenis_indikator: "benefit",
-    tipe_nilai: "rata_rata",
-    sumber_data: "Raster cahaya malam hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Menggunakan zonal statistics untuk menghitung rata-rata intensitas cahaya malam pada setiap grid.",
+    tipe_nilai: "intensitas",
     deskripsi:
       "Semakin tinggi intensitas cahaya malam, semakin tinggi indikasi aktivitas ekonomi wilayah.",
-    urutan: 1,
   },
   {
-    kode_kriteria: "kondisi_ekonomi",
-    kode_indikator: "kepadatan_populasi",
+    id_indikator: 8,
+    id_kriteria: 3,
     nama_indikator: "Kepadatan Populasi",
     satuan: "jiwa/km2",
-    jenis_indikator: "benefit",
     tipe_nilai: "kepadatan",
-    sumber_data: "Data populasi hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Menghitung atau menggabungkan data populasi ke dalam grid analisis.",
     deskripsi:
       "Semakin tinggi kepadatan populasi, semakin besar potensi pasar.",
-    urutan: 2,
   },
 
   // 4. Aksesibilitas Transportasi
   {
-    kode_kriteria: "aksesibilitas_transportasi",
-    kode_indikator: "jarak_jalan_utama",
+    id_indikator: 9,
+    id_kriteria: 4,
     nama_indikator: "Jarak ke Jalan Utama",
     satuan: "meter",
-    jenis_indikator: "cost",
     tipe_nilai: "jarak",
-    sumber_data: "Jaringan jalan hasil preprocessing QGIS",
-    metode_pengolahan: "Menghitung jarak terdekat dari grid ke jalan utama.",
     deskripsi:
       "Semakin dekat dengan jalan utama, semakin mudah lokasi dijangkau.",
-    urutan: 1,
   },
   {
-    kode_kriteria: "aksesibilitas_transportasi",
-    kode_indikator: "kedekatan_simpul_transportasi",
+    id_indikator: 10,
+    id_kriteria: 4,
     nama_indikator: "Kedekatan Simpul Transportasi",
     satuan: "meter",
-    jenis_indikator: "cost",
     tipe_nilai: "jarak",
-    sumber_data: "Data simpul transportasi hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Menghitung jarak terdekat dari grid ke simpul transportasi.",
     deskripsi:
       "Semakin dekat dengan simpul transportasi, semakin tinggi aksesibilitas lokasi.",
-    urutan: 2,
   },
   {
-    kode_kriteria: "aksesibilitas_transportasi",
-    kode_indikator: "kepadatan_simpang_jalan",
+    id_indikator: 11,
+    id_kriteria: 4,
     nama_indikator: "Kepadatan Simpang Jalan",
     satuan: "unit/km2",
-    jenis_indikator: "benefit",
     tipe_nilai: "kepadatan",
-    sumber_data: "Jaringan jalan hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Menghitung jumlah atau kepadatan simpang jalan pada setiap grid.",
     deskripsi:
       "Semakin tinggi kepadatan simpang jalan, semakin tinggi konektivitas kawasan.",
-    urutan: 3,
   },
 
   // 5. Persaingan
   {
-    kode_kriteria: "persaingan",
-    kode_indikator: "kepadatan_coffee_shop_existing",
+    id_indikator: 12,
+    id_kriteria: 5,
     nama_indikator: "Kepadatan Coffee Shop Existing",
     satuan: "unit/km2",
-    jenis_indikator: "cost",
     tipe_nilai: "kepadatan",
-    sumber_data: "Data coffee shop eksisting dan hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Menghitung kepadatan coffee shop eksisting pada setiap grid.",
     deskripsi:
       "Semakin tinggi kepadatan coffee shop eksisting, semakin tinggi tingkat persaingan.",
-    urutan: 1,
   },
   {
-    kode_kriteria: "persaingan",
-    kode_indikator: "jarak_coffee_shop_existing_terdekat",
+    id_indikator: 13,
+    id_kriteria: 5,
     nama_indikator: "Jarak ke Coffee Shop Existing Terdekat",
     satuan: "meter",
-    jenis_indikator: "benefit",
     tipe_nilai: "jarak",
-    sumber_data: "Data coffee shop eksisting dan hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Menghitung jarak terdekat dari grid ke coffee shop eksisting.",
     deskripsi:
       "Semakin jauh dari coffee shop eksisting, semakin rendah tekanan persaingan langsung.",
-    urutan: 2,
   },
 
   // 6. Pembatas Lahan
   {
-    kode_kriteria: "pembatas_lahan",
-    kode_indikator: "sawah",
+    id_indikator: 14,
+    id_kriteria: 6,
     nama_indikator: "Sawah",
     satuan: "biner",
-    jenis_indikator: "constraint",
-    tipe_nilai: "pembatas_lahan",
-    sumber_data: "Polygon sawah hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Overlay area sawah dengan grid untuk menentukan grid yang terkena pembatas lahan.",
+    tipe_nilai: "mask",
     deskripsi:
       "Grid yang berada pada area sawah dapat dianggap sebagai area pembatas sesuai aturan penelitian.",
-    urutan: 1,
   },
   {
-    kode_kriteria: "pembatas_lahan",
-    kode_indikator: "sempadan_sungai",
+    id_indikator: 15,
+    id_kriteria: 6,
     nama_indikator: "Sempadan Sungai",
     satuan: "biner",
-    jenis_indikator: "constraint",
-    tipe_nilai: "pembatas_lahan",
-    sumber_data: "Buffer sempadan sungai hasil preprocessing QGIS",
-    metode_pengolahan:
-      "Overlay area sempadan sungai dengan grid untuk menentukan grid yang terkena pembatas.",
+    tipe_nilai: "mask",
     deskripsi:
       "Grid yang masuk area sempadan sungai dapat menjadi area pembatas lokasi usaha.",
-    urutan: 2,
   },
 ];
 
@@ -311,20 +232,16 @@ async function seedKriteria() {
   for (const item of kriteriaData) {
     await prisma.kriteria.upsert({
       where: {
-        kode_kriteria: item.kode_kriteria,
+        id_kriteria: item.id_kriteria,
       },
       update: {
         nama_kriteria: item.nama_kriteria,
         deskripsi: item.deskripsi,
-        urutan: item.urutan,
-        is_active: true,
       },
       create: {
-        kode_kriteria: item.kode_kriteria,
+        id_kriteria: item.id_kriteria,
         nama_kriteria: item.nama_kriteria,
         deskripsi: item.deskripsi,
-        urutan: item.urutan,
-        is_active: true,
       },
     });
   }
@@ -334,46 +251,24 @@ async function seedKriteria() {
 
 async function seedIndikator() {
   for (const item of indikatorData) {
-    const kriteria = await prisma.kriteria.findUnique({
-      where: {
-        kode_kriteria: item.kode_kriteria,
-      },
-    });
-
-    if (!kriteria) {
-      throw new Error(
-        `Kriteria dengan kode ${item.kode_kriteria} tidak ditemukan.`,
-      );
-    }
-
     await prisma.indikator.upsert({
       where: {
-        kode_indikator: item.kode_indikator,
+        id_indikator: item.id_indikator,
       },
       update: {
-        id_kriteria: kriteria.id_kriteria,
+        id_kriteria: item.id_kriteria,
         nama_indikator: item.nama_indikator,
         satuan: item.satuan,
-        jenis_indikator: item.jenis_indikator,
         tipe_nilai: item.tipe_nilai,
-        sumber_data: item.sumber_data,
-        metode_pengolahan: item.metode_pengolahan,
         deskripsi: item.deskripsi,
-        urutan: item.urutan,
-        is_active: true,
       },
       create: {
-        id_kriteria: kriteria.id_kriteria,
-        kode_indikator: item.kode_indikator,
+        id_indikator: item.id_indikator,
+        id_kriteria: item.id_kriteria,
         nama_indikator: item.nama_indikator,
         satuan: item.satuan,
-        jenis_indikator: item.jenis_indikator,
         tipe_nilai: item.tipe_nilai,
-        sumber_data: item.sumber_data,
-        metode_pengolahan: item.metode_pengolahan,
         deskripsi: item.deskripsi,
-        urutan: item.urutan,
-        is_active: true,
       },
     });
   }
@@ -425,8 +320,6 @@ async function resetSeedData() {
         bobot_kriteria,
         ahp_indikator_matrix,
         ahp_kriteria_matrix,
-        simulasi_bobot_indikator,
-        simulasi,
         hasil_wlc,
         raster_layers,
         analysis_run,
@@ -434,7 +327,9 @@ async function resetSeedData() {
         indikator,
         kriteria,
         pakar,
-        users
+        users,
+        existing_coffee_shop,
+        grid
       RESTART IDENTITY CASCADE;
     `);
   });
@@ -468,26 +363,26 @@ async function resetSeedData() {
 
 async function importLocalRasters() {
   console.log("Checking local QGIS rasters to auto-import...");
-  
+
   const GeotiffHelper = require("../../helpers/geotiff-helper");
   const RasterDbUtil = require("../../utils/raster-db-util");
 
   const localRasters = [
-    { id_indikator: 1, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\--zona fungsional kota\\layanan makan - KDE.tif" },
-    { id_indikator: 2, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\--zona fungsional kota\\olahraga dan rekreasi - KDE.tif" },
-    { id_indikator: 3, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\--zona fungsional kota\\hunian - KDE.tif" },
-    { id_indikator: 4, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\-- Permintaan Pasar\\pusat belanja.tif" },
-    { id_indikator: 5, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\-- Permintaan Pasar\\fasilitas pendidikan.tif" },
-    { id_indikator: 6, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\-- Permintaan Pasar\\perkantoran - KDE.tif" },
-    { id_indikator: 7, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\-- Kondisi Ekonomi\\INL.tif" },
-    { id_indikator: 8, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\-- Kondisi Ekonomi\\raster 465m.tif" },
-    { id_indikator: 9, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\-- aksesbilitas transportasi\\proximity map.tif"},
-    { id_indikator: 10, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\-- aksesbilitas transportasi\\simpul transportasi - KDE.tif" },
-    { id_indikator: 11, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\-- aksesbilitas transportasi\\persimpangan - KDE.tif" },
-    { id_indikator: 12, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\-- Persaingan\\kedai kopi - KDE.tif" },
-    { id_indikator: 13, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\-- Persaingan\\raster distance.tif" },
-    { id_indikator: 14, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\-- constrain\\raster-sawah.tif" },
-    { id_indikator: 15, source: "C:\\Penelitian Pertama Saya_SKRIPSI\\QGIS\\-- constrain\\raster sungai.tif" },
+    { id_indikator: 1, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/layanan makan-final-tif.tif" },
+    { id_indikator: 2, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/olahraga dan rekreasi-final-tif.tif" },
+    { id_indikator: 3, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/hunian-final-tif.tif" },
+    { id_indikator: 4, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/jarak ke pusat belanja-final-tif.tif" },
+    { id_indikator: 5, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/fasilitas pendidikan-final-tif.tif" },
+    { id_indikator: 6, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/kantor-final-tif.tif" },
+    { id_indikator: 7, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/INF-final-tif.tif" },
+    { id_indikator: 8, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/populasi-final-tif.tif" },
+    { id_indikator: 9, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/jarak ke jalan-final-tif.tif" },
+    { id_indikator: 10, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/simpul tranport-final-tif.tif" },
+    { id_indikator: 11, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/persimpangan-final-tif.tif" },
+    { id_indikator: 12, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/coffeeshop-final-tif.tif" },
+    { id_indikator: 13, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/3. final raster/jarak ke coffeshop-final-tif.tif" },
+    { id_indikator: 14, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/1. rasterisasi/sawah-tif.tif" },
+    { id_indikator: 15, source: "C:/Penelitian Pertama Saya_SKRIPSI/Data spasial/1. rasterisasi/sungai-tif.tif" },
   ];
 
   const uploadDir = path.join(process.cwd(), "storage", "geotiff", "raw");
@@ -502,7 +397,7 @@ async function importLocalRasters() {
     }
 
     console.log(`  [+] Importing ${path.basename(item.source)} for indicator ${item.id_indikator}...`);
-    
+
     const ext = path.extname(item.source).toLowerCase();
     const timestamp = Date.now();
     const random = Math.round(Math.random() * 1e9);
@@ -523,24 +418,11 @@ async function importLocalRasters() {
           id_indikator: item.id_indikator,
           tipe_raster: "raw",
           file_path: storedPath,
-          original_filename: path.basename(item.source),
           crs: metadata.crs,
-          resolution_x: metadata.resolution_x,
-          resolution_y: metadata.resolution_y,
-          width: metadata.width,
-          height: metadata.height,
-          band_count: metadata.band_count,
-          extent: metadata.extent,
           min_value: metadata.min_value,
           max_value: metadata.max_value,
           mean_value: metadata.mean_value,
-          std_value: metadata.std_value,
           nodata_value: metadata.nodata_value,
-          jumlah_pixel: metadata.jumlah_pixel,
-          jumlah_pixel_valid: metadata.jumlah_pixel_valid,
-          jumlah_pixel_nodata: metadata.jumlah_pixel_nodata,
-          versi: 1,
-          is_active: true,
         }
       });
       console.log(`      Success: Imported ${fileName}`);
@@ -556,31 +438,28 @@ async function importLocalRasters() {
 async function seedAHP() {
   console.log("Seeding AHP bobot default untuk 3 pakar...");
 
-  // Matriks perbandingan kriteria per pakar (6x6, konsisten CR < 0.1)
+  // Matriks perbandingan kriteria per pakar (5x5, konsisten CR < 0.1)
   const matriksKriteria = [
     [ // Pakar 1
-      [1, 2, 3, 2, 5, 7],
-      [0.5, 1, 2, 1, 3, 5],
-      [0.333, 0.5, 1, 0.5, 2, 3],
-      [0.5, 1, 2, 1, 3, 5],
-      [0.2, 0.333, 0.5, 0.333, 1, 3],
-      [0.143, 0.2, 0.333, 0.2, 0.333, 1],
+      [1, 2, 3, 2, 5],
+      [0.5, 1, 2, 1, 3],
+      [0.333, 0.5, 1, 0.5, 2],
+      [0.5, 1, 2, 1, 3],
+      [0.2, 0.333, 0.5, 0.333, 1]
     ],
     [ // Pakar 2
-      [1, 3, 2, 3, 5, 7],
-      [0.333, 1, 0.5, 1, 2, 5],
-      [0.5, 2, 1, 2, 3, 5],
-      [0.333, 1, 0.5, 1, 3, 5],
-      [0.2, 0.5, 0.333, 0.333, 1, 3],
-      [0.143, 0.2, 0.2, 0.2, 0.333, 1],
+      [1, 3, 2, 3, 5],
+      [1/3, 1, 0.5, 1, 2],
+      [0.5, 2, 1, 2, 3],
+      [1/3, 1, 0.5, 1, 3],
+      [0.2, 0.5, 1/3, 1/3, 1]
     ],
     [ // Pakar 3
-      [1, 2, 2, 3, 4, 7],
-      [0.5, 1, 1, 2, 3, 5],
-      [0.5, 1, 1, 2, 3, 5],
-      [0.333, 0.5, 0.5, 1, 2, 5],
-      [0.25, 0.333, 0.333, 0.5, 1, 3],
-      [0.143, 0.2, 0.2, 0.2, 0.333, 1],
+      [1, 2, 2, 3, 4],
+      [0.5, 1, 1, 2, 3],
+      [0.5, 1, 1, 2, 3],
+      [1/3, 0.5, 0.5, 1, 2],
+      [0.25, 1/3, 1/3, 0.5, 1]
     ],
   ];
 
@@ -588,10 +467,9 @@ async function seedAHP() {
   const matriksIndikator = [
     { id_kriteria: 1, item_ids: [1, 2, 3], matrix: [[1, 2, 3], [0.5, 1, 2], [0.333, 0.5, 1]] },
     { id_kriteria: 2, item_ids: [4, 5, 6], matrix: [[1, 0.5, 2], [2, 1, 3], [0.5, 0.333, 1]] },
-    { id_kriteria: 3, item_ids: [7, 8],    matrix: [[1, 2], [0.5, 1]] },
+    { id_kriteria: 3, item_ids: [7, 8], matrix: [[1, 2], [0.5, 1]] },
     { id_kriteria: 4, item_ids: [9, 10, 11], matrix: [[1, 2, 3], [0.5, 1, 2], [0.333, 0.5, 1]] },
     { id_kriteria: 5, item_ids: [12, 13], matrix: [[1, 0.5], [2, 1]] },
-    { id_kriteria: 6, item_ids: [14, 15], matrix: [[1, 1], [1, 1]] },
   ];
 
   const pakarList = await prisma.pakar.findMany({ where: { is_active: true }, orderBy: { id_pakar: "asc" } });
@@ -604,7 +482,7 @@ async function seedAHP() {
       await AHPService.saveKriteriaAHP({
         id_pakar: pakar.id_pakar,
         matrix: matKriteria,
-        item_ids: [1, 2, 3, 4, 5, 6],
+        item_ids: [1, 2, 3, 4, 5],
       });
       console.log(`  [OK] AHP Kriteria Pakar ${pakar.id_pakar} (${pakar.nama_pakar}) disimpan.`);
     } catch (e) {
@@ -629,6 +507,125 @@ async function seedAHP() {
   console.log("AHP bobot default selesai di-seed.");
 }
 
+async function seedExistingCoffeeShops() {
+  console.log("Seeding existing coffee shops from JSON...");
+  const jsonPath = path.join(__dirname, "existing_coffee_shops.json");
+  if (!fs.existsSync(jsonPath)) {
+    throw new Error(`existing_coffee_shops.json tidak ditemukan di ${jsonPath}`);
+  }
+
+  const rawData = fs.readFileSync(jsonPath, "utf-8");
+  const shops = JSON.parse(rawData);
+
+  for (const shop of shops) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO existing_coffee_shop (nama, latitude, longitude, geom, created_at, updated_at)
+       VALUES ($1, $2, $3, ST_SetSRID(ST_Point($4, $5), 32749), NOW(), NOW())`,
+      shop.nama,
+      shop.latitude,
+      shop.longitude,
+      shop.x_32749,
+      shop.y_32749
+    );
+  }
+  console.log(`Seeded ${shops.length} existing coffee shop points.`);
+}
+
+async function calculateRasterMedian(rawRaster) {
+  try {
+    const rawAbsPath = path.isAbsolute(rawRaster.file_path)
+      ? rawRaster.file_path
+      : path.join(process.cwd(), rawRaster.file_path);
+
+    const GeotiffHelper = require("../../helpers/geotiff-helper");
+    const { noDataValue, pixelValues } = await GeotiffHelper.readPixelsForFuzzy(rawAbsPath);
+
+    const validValues = pixelValues.filter(v =>
+      v !== null &&
+      v !== undefined &&
+      !Number.isNaN(v) &&
+      Number.isFinite(v) &&
+      (noDataValue === null || v !== noDataValue)
+    );
+
+    if (validValues.length > 0) {
+      validValues.sort((a, b) => a - b);
+      const mid = Math.floor(validValues.length / 2);
+      return validValues.length % 2 !== 0
+        ? validValues[mid]
+        : (validValues[mid - 1] + validValues[mid]) / 2;
+    }
+  } catch (err) {
+    console.error(`Gagal menghitung median untuk indikator ${rawRaster.id_indikator}:`, err.message);
+  }
+  return 0;
+}
+
+async function seedAturanFuzzy() {
+  console.log("Seeding default fuzzy rules...");
+  const indicators = await prisma.indikator.findMany({
+    where: {
+      NOT: { tipe_nilai: "mask" }
+    }
+  });
+
+  const costIndicatorIds = [4, 9, 10, 12];
+
+  // Konfigurasi jangkauan/radius khusus untuk indikator jarak
+  const customRanges = {
+    4: { nilai_min: 0, nilai_max: 400 },   // Jarak ke pusat belanja
+    9: { nilai_min: 0, nilai_max: 150 },   // Jarak ke jalan umum
+    10: { nilai_min: 0, nilai_max: 800 },  // Jarak ke simpul transportasi
+  };
+
+  for (const ind of indicators) {
+    let fungsi_fuzzy = costIndicatorIds.includes(ind.id_indikator) ? "linear_decreasing" : "linear_increasing";
+    let arah = costIndicatorIds.includes(ind.id_indikator) ? "decreasing" : "increasing";
+    let autoMidpoint = null;
+    let autoSpread = null;
+
+    if (ind.id_indikator === 13) {
+      fungsi_fuzzy = "near";
+      arah = "optimum";
+      autoSpread = 0.1;
+
+      const rawRaster = await prisma.rasterLayer.findFirst({
+        where: {
+          id_indikator: ind.id_indikator,
+          tipe_raster: "raw",
+        }
+      });
+      if (rawRaster) {
+        autoMidpoint = await calculateRasterMedian(rawRaster);
+      }
+    }
+
+    const range = customRanges[ind.id_indikator] || { nilai_min: null, nilai_max: null };
+
+    await prisma.aturanFuzzy.upsert({
+      where: { id_indikator: ind.id_indikator },
+      update: { 
+        fungsi_fuzzy, 
+        arah, 
+        nilai_min: range.nilai_min, 
+        nilai_max: range.nilai_max,
+        midpoint: autoMidpoint,
+        spread: autoSpread
+      },
+      create: { 
+        id_indikator: ind.id_indikator, 
+        fungsi_fuzzy, 
+        arah, 
+        nilai_min: range.nilai_min, 
+        nilai_max: range.nilai_max,
+        midpoint: autoMidpoint,
+        spread: autoSpread
+      }
+    });
+  }
+  console.log("Default fuzzy rules seeded.");
+}
+
 async function main() {
   console.log("Start seeding master data...");
 
@@ -637,7 +634,20 @@ async function main() {
   await seedUsers();
   await seedKriteria();
   await seedIndikator();
+
+  // Reset database sequence IDs setelah insert manual ID
+  console.log("Resetting postgres ID sequences...");
+  await prisma.$executeRawUnsafe(`SELECT setval(pg_get_serial_sequence('kriteria', 'id_kriteria'), COALESCE(MAX(id_kriteria), 1)) FROM kriteria;`);
+  await prisma.$executeRawUnsafe(`SELECT setval(pg_get_serial_sequence('indikator', 'id_indikator'), COALESCE(MAX(id_indikator), 1)) FROM indikator;`);
+  console.log("Postgres sequence IDs reset successfully.");
+
   await seedPakar();
+
+  try {
+    await seedExistingCoffeeShops();
+  } catch (error) {
+    console.error("Seed existing coffee shops failed:", error.message);
+  }
 
   // Impor file GeoTIFF lokal secara otomatis
   try {
@@ -653,8 +663,15 @@ async function main() {
     console.error("Seed AHP failed:", error.message);
   }
 
+  try {
+    await seedAturanFuzzy();
+  } catch (error) {
+    console.error("Seed fuzzy rules failed:", error.message);
+  }
+
   console.log("Seeding completed.");
 }
+
 main()
   .catch((error) => {
     console.error("Seeding failed:", error);

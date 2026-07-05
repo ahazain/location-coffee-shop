@@ -10,7 +10,7 @@ class RasterDbUtil {
   static parseId(id, fieldName = "ID") {
     const parsedId = Number(id);
 
-    if (!id || Number.isNaN(parsedId)) {
+    if (id === null || id === undefined || Number.isNaN(parsedId)) {
       throw new BadRequestError(`${fieldName} tidak valid.`);
     }
 
@@ -26,38 +26,25 @@ class RasterDbUtil {
   }
 
   /**
-   * Mencari versi tertinggi dari raster pada indikator tertentu di database,
-   * lalu mengembalikan nomor versi berikutnya (versi_maksimum + 1).
+   * Menghapus record raster lama dari database dan mengembalikan path file fisiknya
+   * agar bisa dihapus setelah transaksi sukses (mencegah data hilang jika transaksi gagal).
    */
-  static async getNextVersion(tx, { id_indikator, tipe_raster }) {
-    const aggregate = await tx.rasterLayer.aggregate({
+  static async deleteExistingRaster(tx, { id_indikator, tipe_raster }) {
+    const existing = await tx.rasterLayer.findFirst({
       where: {
-        id_indikator,
+        id_indikator: id_indikator || null,
         tipe_raster,
-      },
-      _max: {
-        versi: true,
       },
     });
 
-    return aggregate._max.versi ? aggregate._max.versi + 1 : 1;
-  }
+    if (existing) {
+      await tx.rasterLayer.delete({
+        where: { id_raster_layer: existing.id_raster_layer },
+      });
+      return existing.file_path;
+    }
 
-  /**
-   * Menonaktifkan status (set is_active = false) semua berkas raster lama
-   * dengan tipe yang sama agar tidak bentrok dengan berkas baru yang diunggah.
-   */
-  static async deactivateActiveRaster(tx, { id_indikator, tipe_raster }) {
-    await tx.rasterLayer.updateMany({
-      where: {
-        id_indikator,
-        tipe_raster,
-        is_active: true,
-      },
-      data: {
-        is_active: false,
-      },
-    });
+    return null;
   }
 
   /**
@@ -65,37 +52,21 @@ class RasterDbUtil {
    * menjadi format JSON respon API yang rapi untuk dikirim ke frontend.
    */
   static formatRaster(raster) {
+    if (!raster) return null;
     return {
       id_raster_layer: raster.id_raster_layer,
       id_indikator: raster.id_indikator,
       id_analysis_run: raster.id_analysis_run,
       tipe_raster: raster.tipe_raster,
       file_path: raster.file_path,
-      original_filename: raster.original_filename,
-      versi: raster.versi,
-      is_active: raster.is_active,
       created_at: raster.created_at,
       updated_at: raster.updated_at,
       metadata: {
         crs: raster.crs,
-        width: raster.width,
-        height: raster.height,
-        band_count: raster.band_count,
-        resolution_x:
-          raster.resolution_x !== null ? Number(raster.resolution_x) : null,
-        resolution_y:
-          raster.resolution_y !== null ? Number(raster.resolution_y) : null,
-        extent: raster.extent,
-        min_value: raster.min_value !== null ? Number(raster.min_value) : null,
-        max_value: raster.max_value !== null ? Number(raster.max_value) : null,
-        mean_value:
-          raster.mean_value !== null ? Number(raster.mean_value) : null,
-        std_value: raster.std_value !== null ? Number(raster.std_value) : null,
-        nodata_value:
-          raster.nodata_value !== null ? Number(raster.nodata_value) : null,
-        jumlah_pixel: raster.jumlah_pixel,
-        jumlah_pixel_valid: raster.jumlah_pixel_valid,
-        jumlah_pixel_nodata: raster.jumlah_pixel_nodata,
+        min_value: raster.min_value !== null && raster.min_value !== undefined ? Number(raster.min_value) : null,
+        max_value: raster.max_value !== null && raster.max_value !== undefined ? Number(raster.max_value) : null,
+        mean_value: raster.mean_value !== null && raster.mean_value !== undefined ? Number(raster.mean_value) : null,
+        nodata_value: raster.nodata_value !== null && raster.nodata_value !== undefined ? Number(raster.nodata_value) : null,
       },
     };
   }

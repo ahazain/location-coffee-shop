@@ -3,6 +3,7 @@ const fs = require("fs");
 const prisma = require("../prisma/prisma-client");
 const FuzzyHelper = require("../helpers/fuzzy-helper");
 const GeotiffHelper = require("../helpers/geotiff-helper");
+const RasterDbUtil = require("../utils/raster-db-util");
 const {
   BadRequestError,
   NotFoundError,
@@ -32,13 +33,9 @@ class FuzzyService {
       throw new NotFoundError("Indikator tidak ditemukan.");
     }
 
-    if (!indikator.is_active) {
-      throw new BadRequestError("Indikator tidak aktif.");
-    }
-
-    if (indikator.jenis_indikator === "constraint") {
+    if (indikator.tipe_nilai === "mask") {
       throw new BadRequestError(
-        "Indikator constraint tidak dihitung sebagai nilai fuzzy.",
+        "Indikator constraint/mask tidak dihitung sebagai nilai fuzzy.",
       );
     }
 
@@ -67,7 +64,6 @@ class FuzzyService {
         rule.spread === null || rule.spread === undefined
           ? null
           : Number(rule.spread),
-      keterangan: rule.keterangan,
       created_at: rule.created_at,
       updated_at: rule.updated_at,
     };
@@ -111,19 +107,36 @@ class FuzzyService {
           : null,
     };
 
-    // Untuk linear increasing / decreasing, min-max diambil dari statistik raster raw
+    // Untuk linear increasing / decreasing, min-max diambil dari database jika ada,
+    // jika null, ambil dari statistik raster raw sebagai fallback
     if (
       fungsiFuzzy === "linear_increasing" ||
       fungsiFuzzy === "linear_decreasing"
     ) {
-      if (rawRaster.min_value === null || rawRaster.max_value === null) {
-        throw new BadRequestError(
-          "Raster raw belum memiliki statistik min/max. Re-upload GeoTIFF raw.",
-        );
+      const dbMin = rule.nilai_min !== null && rule.nilai_min !== undefined ? Number(rule.nilai_min) : null;
+      const dbMax = rule.nilai_max !== null && rule.nilai_max !== undefined ? Number(rule.nilai_max) : null;
+
+      if (dbMin !== null) {
+        resolvedRule.nilai_min = dbMin;
+      } else {
+        if (rawRaster.min_value === null) {
+          throw new BadRequestError(
+            "Raster raw belum memiliki statistik min. Re-upload GeoTIFF raw.",
+          );
+        }
+        resolvedRule.nilai_min = Number(rawRaster.min_value);
       }
 
-      resolvedRule.nilai_min = Number(rawRaster.min_value);
-      resolvedRule.nilai_max = Number(rawRaster.max_value);
+      if (dbMax !== null) {
+        resolvedRule.nilai_max = dbMax;
+      } else {
+        if (rawRaster.max_value === null) {
+          throw new BadRequestError(
+            "Raster raw belum memiliki statistik max. Re-upload GeoTIFF raw.",
+          );
+        }
+        resolvedRule.nilai_max = Number(rawRaster.max_value);
+      }
     }
 
     return resolvedRule;
@@ -179,7 +192,7 @@ class FuzzyService {
   }
 
   static async saveAturan(payload) {
-    const { id_indikator, fungsi_fuzzy, midpoint, spread, keterangan } =
+    const { id_indikator, fungsi_fuzzy, midpoint, spread, nilai_min, nilai_max } =
       payload;
 
     const indikator = await this.getIndikatorOrThrow(id_indikator);
@@ -199,17 +212,22 @@ class FuzzyService {
       where: {
         id_indikator: indikator.id_indikator,
         tipe_raster: "raw",
-        is_active: true,
       },
     });
 
-    let autoMin = null;
-    let autoMax = null;
+    let autoMin = !isNear && nilai_min !== undefined && nilai_min !== null && nilai_min !== "" ? Number(nilai_min) : null;
+    let autoMax = !isNear && nilai_max !== undefined && nilai_max !== null && nilai_max !== "" ? Number(nilai_max) : null;
     let autoMidpoint = isNear ? (scarcityCheck ? Number(midpoint) : null) : null;
 
     if (rawRaster) {
-      autoMin = rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
-      autoMax = rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
+      if (!isNear) {
+        if (autoMin === null) {
+          autoMin = rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
+        }
+        if (autoMax === null) {
+          autoMax = rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
+        }
+      }
 
       if (isNear && autoMidpoint === null) {
         try {
@@ -255,7 +273,6 @@ class FuzzyService {
         nilai_max: autoMax,
         midpoint: isNear ? autoMidpoint : null,
         spread: isNear ? statusSpread : null,
-        keterangan,
       },
       create: {
         id_indikator: indikator.id_indikator,
@@ -265,7 +282,6 @@ class FuzzyService {
         nilai_max: autoMax,
         midpoint: isNear ? autoMidpoint : null,
         spread: isNear ? statusSpread : null,
-        keterangan,
       },
     });
 
@@ -292,6 +308,10 @@ class FuzzyService {
       midpoint:
         payload.midpoint !== undefined ? payload.midpoint : existing.midpoint,
       spread: payload.spread !== undefined ? payload.spread : existing.spread,
+      nilai_min:
+        payload.nilai_min !== undefined ? payload.nilai_min : existing.nilai_min,
+      nilai_max:
+        payload.nilai_max !== undefined ? payload.nilai_max : existing.nilai_max,
     };
 
     const isNear = mergedPayload.fungsi_fuzzy === "near";
@@ -310,17 +330,26 @@ class FuzzyService {
       where: {
         id_indikator: parsedId,
         tipe_raster: "raw",
-        is_active: true,
       },
     });
 
-    let autoMin = null;
-    let autoMax = null;
+    let autoMin = !isNear && mergedPayload.nilai_min !== null && mergedPayload.nilai_min !== undefined && mergedPayload.nilai_min !== ""
+      ? Number(mergedPayload.nilai_min)
+      : null;
+    let autoMax = !isNear && mergedPayload.nilai_max !== null && mergedPayload.nilai_max !== undefined && mergedPayload.nilai_max !== ""
+      ? Number(mergedPayload.nilai_max)
+      : null;
     let autoMidpoint = isNear ? (scarcityCheck ? Number(mergedPayload.midpoint) : null) : null;
 
     if (rawRaster) {
-      autoMin = rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
-      autoMax = rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
+      if (!isNear) {
+        if (autoMin === null) {
+          autoMin = rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
+        }
+        if (autoMax === null) {
+          autoMax = rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
+        }
+      }
 
       if (isNear && autoMidpoint === null) {
         try {
@@ -366,10 +395,6 @@ class FuzzyService {
         nilai_max: autoMax,
         midpoint: isNear ? autoMidpoint : null,
         spread: isNear ? statusSpread : null,
-        keterangan:
-          payload.keterangan !== undefined
-            ? payload.keterangan
-            : existing.keterangan,
       },
     });
 
@@ -436,7 +461,6 @@ class FuzzyService {
       where: {
         id_indikator: parsedId,
         tipe_raster: "raw",
-        is_active: true,
       },
     });
 
@@ -499,20 +523,14 @@ class FuzzyService {
 
     // 9. Simpan ke DB dalam satu transaksi
     let savedRaster;
+    let oldFuzzyFilePath = null;
 
     try {
       savedRaster = await prisma.$transaction(async (tx) => {
-        // Cari versi terakhir
-        const agg = await tx.rasterLayer.aggregate({
-          where: { id_indikator: parsedId, tipe_raster: "fuzzy" },
-          _max: { versi: true },
-        });
-        const nextVersi = agg._max.versi ? agg._max.versi + 1 : 1;
-
-        // Deaktivasi versi fuzzy lama
-        await tx.rasterLayer.updateMany({
-          where: { id_indikator: parsedId, tipe_raster: "fuzzy", is_active: true },
-          data: { is_active: false },
+        // Hapus record fuzzy lama dari DB dan simpan path-nya
+        oldFuzzyFilePath = await RasterDbUtil.deleteExistingRaster(tx, {
+          id_indikator: parsedId,
+          tipe_raster: "fuzzy",
         });
 
         // Simpan raster fuzzy baru
@@ -521,31 +539,35 @@ class FuzzyService {
             id_indikator: parsedId,
             tipe_raster: "fuzzy",
             file_path: fuzzyRelPath,
-            original_filename: `fuzzy_ind${parsedId}_v${nextVersi}.tif`,
             crs: fuzzyMetadata.crs,
-            resolution_x: fuzzyMetadata.resolution_x,
-            resolution_y: fuzzyMetadata.resolution_y,
-            width: fuzzyMetadata.width,
-            height: fuzzyMetadata.height,
-            band_count: fuzzyMetadata.band_count,
-            extent: fuzzyMetadata.extent,
             min_value: fuzzyMetadata.min_value,
             max_value: fuzzyMetadata.max_value,
             mean_value: fuzzyMetadata.mean_value,
-            std_value: fuzzyMetadata.std_value,
             nodata_value: fuzzyOutputNodata,
-            jumlah_pixel: fuzzyMetadata.jumlah_pixel,
-            jumlah_pixel_valid: fuzzyMetadata.jumlah_pixel_valid,
-            jumlah_pixel_nodata: fuzzyMetadata.jumlah_pixel_nodata,
-            versi: nextVersi,
-            is_active: true,
           },
         });
       });
     } catch (dbErr) {
-      // Rollback file jika DB gagal
-      if (fs.existsSync(fuzzyAbsPath)) fs.unlinkSync(fuzzyAbsPath);
+      // Rollback file baru jika DB gagal
+      if (fs.existsSync(fuzzyAbsPath)) {
+        try { fs.unlinkSync(fuzzyAbsPath); } catch (_) {}
+      }
       throw dbErr;
+    }
+
+    // Hapus file fuzzy lama dari penyimpanan setelah transaksi DB sukses
+    if (oldFuzzyFilePath) {
+      const absoluteOldPath = path.isAbsolute(oldFuzzyFilePath)
+        ? oldFuzzyFilePath
+        : path.join(process.cwd(), oldFuzzyFilePath);
+
+      if (fs.existsSync(absoluteOldPath)) {
+        try {
+          fs.unlinkSync(absoluteOldPath);
+        } catch (err) {
+          console.warn(`  [WARNING] Gagal menghapus file fuzzy lama ${oldFuzzyFilePath}: ${err.message}`);
+        }
+      }
     }
 
     return {
@@ -559,9 +581,6 @@ class FuzzyService {
       midpoint: resolvedRule.midpoint ?? null,
       spread: resolvedRule.spread ?? null,
       total_pixel: pixelValues.length,
-      total_pixel_valid: savedRaster.jumlah_pixel_valid,
-      total_pixel_nodata: savedRaster.jumlah_pixel_nodata,
-      versi: savedRaster.versi,
     };
   }
 

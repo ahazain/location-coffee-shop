@@ -2,12 +2,9 @@ import Card from "../common/Card";
 import { suitabilityStyles } from "../../utils/mapStyle";
 
 const legendOrder = [
-  "Sangat sesuai",
   "Sesuai",
-  "Cukup sesuai",
   "Kurang sesuai",
   "Tidak sesuai",
-  "Area terbatas",
 ];
 
 export default function Legend() {

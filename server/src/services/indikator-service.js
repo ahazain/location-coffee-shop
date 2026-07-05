@@ -19,20 +19,15 @@ class IndikatorService {
     return {
       id: indikator.id_indikator,
       id_kriteria: indikator.id_kriteria,
-      kode_indikator: indikator.kode_indikator,
+      kode_indikator: String(indikator.id_indikator),
       nama_indikator: indikator.nama_indikator,
       satuan: indikator.satuan,
-      jenis_indikator: indikator.jenis_indikator,
       tipe_nilai: indikator.tipe_nilai,
-      sumber_data: indikator.sumber_data,
-      metode_pengolahan: indikator.metode_pengolahan,
       deskripsi: indikator.deskripsi,
-      urutan: indikator.urutan,
-      is_active: indikator.is_active,
       kriteria: indikator.kriteria
         ? {
             id: indikator.kriteria.id_kriteria,
-            kode_kriteria: indikator.kriteria.kode_kriteria,
+            kode_kriteria: String(indikator.kriteria.id_kriteria),
             nama_kriteria: indikator.kriteria.nama_kriteria,
           }
         : undefined,
@@ -52,25 +47,16 @@ class IndikatorService {
       throw new NotFoundError("Kriteria tidak ditemukan.");
     }
 
-    if (!kriteria.is_active) {
-      throw new BadRequestError("Kriteria tidak aktif.");
-    }
-
     return parsedIdKriteria;
   }
 
   static async createIndikator(payload) {
     const {
       id_kriteria,
-      kode_indikator,
       nama_indikator,
       satuan,
-      jenis_indikator,
       tipe_nilai,
-      sumber_data,
-      metode_pengolahan,
       deskripsi,
-      urutan,
     } = payload;
 
     if (!id_kriteria) {
@@ -83,29 +69,13 @@ class IndikatorService {
 
     const parsedIdKriteria = await this.validateKriteria(id_kriteria);
 
-    if (kode_indikator) {
-      const existingKode = await prisma.indikator.findUnique({
-        where: { kode_indikator },
-      });
-
-      if (existingKode) {
-        throw new BadRequestError("Kode indikator sudah digunakan.");
-      }
-    }
-
     const created = await prisma.indikator.create({
       data: {
         id_kriteria: parsedIdKriteria,
-        kode_indikator,
         nama_indikator,
         satuan,
-        jenis_indikator,
         tipe_nilai,
-        sumber_data,
-        metode_pengolahan,
         deskripsi,
-        urutan,
-        is_active: true,
       },
       include: {
         kriteria: true,
@@ -122,7 +92,6 @@ class IndikatorService {
       },
       orderBy: [
         { id_kriteria: "asc" },
-        { urutan: "asc" },
         { id_indikator: "asc" },
       ],
     });
@@ -160,7 +129,7 @@ class IndikatorService {
       include: {
         kriteria: true,
       },
-      orderBy: [{ urutan: "asc" }, { id_indikator: "asc" }],
+      orderBy: [{ id_indikator: "asc" }],
     });
 
     return {
@@ -183,16 +152,10 @@ class IndikatorService {
 
     const {
       id_kriteria,
-      kode_indikator,
       nama_indikator,
       satuan,
-      jenis_indikator,
       tipe_nilai,
-      sumber_data,
-      metode_pengolahan,
       deskripsi,
-      urutan,
-      is_active,
     } = payload;
 
     let parsedIdKriteria = undefined;
@@ -205,30 +168,14 @@ class IndikatorService {
       throw new BadRequestError("Nama indikator tidak boleh kosong.");
     }
 
-    if (kode_indikator && kode_indikator !== existing.kode_indikator) {
-      const existingKode = await prisma.indikator.findUnique({
-        where: { kode_indikator },
-      });
-
-      if (existingKode) {
-        throw new BadRequestError("Kode indikator sudah digunakan.");
-      }
-    }
-
     const updated = await prisma.indikator.update({
       where: { id_indikator },
       data: {
         id_kriteria: parsedIdKriteria,
-        kode_indikator,
         nama_indikator,
         satuan,
-        jenis_indikator,
         tipe_nilai,
-        sumber_data,
-        metode_pengolahan,
         deskripsi,
-        urutan,
-        is_active,
       },
       include: {
         kriteria: true,
@@ -249,17 +196,14 @@ class IndikatorService {
       throw new NotFoundError("Indikator tidak ditemukan.");
     }
 
-    const updated = await prisma.indikator.update({
+    const deleted = await prisma.indikator.delete({
       where: { id_indikator },
-      data: {
-        is_active: false,
-      },
       include: {
         kriteria: true,
       },
     });
 
-    return this.formatIndikator(updated);
+    return this.formatIndikator(deleted);
   }
 }
 

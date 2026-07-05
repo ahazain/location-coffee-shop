@@ -52,7 +52,14 @@ export const mapService = {
   },
 
   async getActiveMap() {
-    return this.getDefaultMap();
+    const active = await wlcService.getActive();
+    if (!active) return null;
+
+    const publishedVersion = localStorage.getItem("wlc_map_published_version");
+    if (publishedVersion === String(active.versi)) {
+      return this.getDefaultMap();
+    }
+    return null;
   },
 
   async getCustomAhpMap() {

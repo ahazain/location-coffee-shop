@@ -4,7 +4,6 @@ import Badge from "../components/common/Badge";
 import Button from "../components/common/Button";
 import Card from "../components/common/Card";
 import Toast from "../components/common/Toast";
-import ConfirmationModal from "../components/common/ConfirmationModal";
 import AdminLayout from "../layouts/AdminLayout";
 import { wlcService } from "../services/api/wlcService";
 import { ahpService } from "../services/api/ahpService";
@@ -18,11 +17,9 @@ export default function AdminWlcPage() {
 
   const [loading, setLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
-  const [sortDirection, setSortDirection] = useState("desc"); // "desc" = tertinggi dulu, "asc" = terendah dulu
 
   // UI States (disamakan dengan AdminDatasetsPage)
   const [toast, setToast] = useState(null);
-  const [modalConfig, setModalConfig] = useState(null); // { isOpen, title, message, onConfirm, variant }
 
   const loadData = async () => {
     try {
@@ -60,62 +57,8 @@ export default function AdminWlcPage() {
     return Object.entries(count).map(([className, total]) => ({ className, total }));
   }, [grids]);
 
-  const topGrid = useMemo(() => {
-    if (!grids?.features || grids.features.length === 0) return null;
-    // Find the feature with the highest scoreDefault
-    return [...grids.features].sort((a, b) => b.properties.scoreDefault - a.properties.scoreDefault)[0];
-  }, [grids]);
-
-  const breakdown = useMemo(() => {
-    if (!topGrid || !konsensus?.bobot_indikator) return [];
-
-    const scores = topGrid.properties.indicatorScores || {};
-
-    const rows = konsensus.bobot_indikator.map((bobotInd) => {
-      const rawVal = scores[bobotInd.kode] ?? 0;
-
-      // Ambil nama indikator dari daftar indikator (indikatorList) berdasarkan kode,
-      // fallback ke nama yang mungkin sudah ada di data konsensus.
-      const matchedIndikator = indikatorList.find(
-        (ind) => ind.kode_indikator === bobotInd.kode || ind.kode === bobotInd.kode
-      );
-      const indicatorName =
-        matchedIndikator?.nama_indikator ||
-        matchedIndikator?.nama ||
-        bobotInd.name ||
-        bobotInd.kode;
-
-      return {
-        indicatorCode: bobotInd.kode,
-        indicatorName,
-        rawValue: rawVal,
-        weight: bobotInd.bobot_akhir,
-        contribution: rawVal * bobotInd.bobot_akhir,
-      };
-    });
-
-    // Urutkan berdasarkan nilai asli spasial (skor), sesuai arah yang dipilih pengguna.
-    return rows.sort((a, b) =>
-      sortDirection === "desc" ? b.rawValue - a.rawValue : a.rawValue - b.rawValue
-    );
-  }, [topGrid, konsensus, indikatorList, sortDirection]);
-
-  // Klik tombol "Hitung WLC Ulang" -> tampilkan modal konfirmasi dulu
-  function handleRunWlcClick() {
-    setModalConfig({
-      isOpen: true,
-      title: "Konfirmasi Kalkulasi WLC",
-      message: activeWlc
-        ? "Apakah Anda yakin ingin menghitung ulang WLC? Hasil versi sebelumnya akan digantikan dengan versi baru berdasarkan data fuzzy dan bobot AHP terkini."
-        : "Apakah Anda yakin ingin menjalankan kalkulasi WLC untuk pertama kali berdasarkan data fuzzy dan bobot AHP saat ini?",
-      variant: "warning",
-      onConfirm: executeRunWlc,
-    });
-  }
-
-  // Eksekusi kalkulasi WLC setelah konfirmasi
-  async function executeRunWlc() {
-    setModalConfig(null);
+  // Klik tombol "Hitung WLC Ulang" -> langsung jalankan kalkulasi tanpa konfirmasi
+  async function handleRunWlcClick() {
     setIsRunning(true);
     try {
       await wlcService.calculate();
@@ -259,64 +202,6 @@ export default function AdminWlcPage() {
           </div>
         </Card>
       </div>
-
-      {topGrid && (
-        <Card className="overflow-hidden p-0">
-          <div className="flex flex-col justify-between gap-3 border-b border-stone-200 p-5 sm:flex-row sm:items-center">
-            <div>
-              <h2 className="text-lg font-bold text-stone-950">Kontribusi Nilai pada Grid Terbaik ({topGrid.properties.gridCode})</h2>
-              <p className="mt-1 text-sm text-stone-500">Menampilkan nilai asli masing-masing indikator pada grid dengan skor WLC tertinggi.</p>
-            </div>
-            <Button
-              variant="secondary"
-              onClick={() => setSortDirection((prev) => (prev === "desc" ? "asc" : "desc"))}
-            >
-              <RefreshCcw size={16} />
-              {sortDirection === "desc" ? "Skor Tertinggi" : "Skor Terendah"}
-            </Button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
-                <tr>
-                  <th className="px-5 py-3">Indikator</th>
-                  <th className="px-5 py-3 text-right">Nilai Asli Spasial</th>
-                  <th className="px-5 py-3 text-right">Bobot Konsensus (Wi)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {loading ? (
-                  <tr><td colSpan="3" className="px-5 py-10 text-center text-stone-400">Memuat...</td></tr>
-                ) : breakdown.length === 0 ? (
-                  <tr><td colSpan="3" className="px-5 py-10 text-center text-stone-400">Data bobot tidak lengkap.</td></tr>
-                ) : (
-                  breakdown.map((row) => (
-                    <tr key={row.indicatorCode} className="hover:bg-stone-50">
-                      <td className="px-5 py-4 font-semibold text-stone-900">{row.indicatorName}</td>
-                      <td className="px-5 py-4 text-right text-stone-600">
-                        {row.rawValue.toLocaleString("id-ID")}
-                      </td>
-                      <td className="px-5 py-4 text-right font-bold text-stone-950">{(row.weight * 100).toFixed(4)}%</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
-      {/* Confirmation Modal */}
-      {modalConfig && (
-        <ConfirmationModal
-          isOpen={modalConfig.isOpen}
-          title={modalConfig.title}
-          message={modalConfig.message}
-          variant={modalConfig.variant}
-          onConfirm={modalConfig.onConfirm}
-          onCancel={() => setModalConfig(null)}
-        />
-      )}
 
       {/* Toast Notification */}
       {toast && (

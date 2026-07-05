@@ -1,9 +1,8 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { BarChart3, BrainCircuit, Calculator, LayoutDashboard, MapPinned, Settings, Sigma, Menu, UploadCloud, ListTree, LogOut } from "lucide-react";
+import { BarChart3, BrainCircuit, Calculator, MapPinned, Settings, Sigma, Menu, UploadCloud, ListTree, LogOut, CheckSquare } from "lucide-react";
 import { cn } from "../../utils/className";
 
 const navItems = [
-  { label: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Dataset", to: "/admin/datasets", icon: UploadCloud },
   { label: "Kriteria", to: "/admin/kriteria", icon: ListTree },
   { label: "Indikator", to: "/admin/indicators", icon: BarChart3 },
@@ -11,6 +10,7 @@ const navItems = [
   { label: "AHP Responden", to: "/admin/ahp", icon: BrainCircuit },
   { label: "Hitung WLC", to: "/admin/wlc", icon: Calculator },
   { label: "Preview & Publish", to: "/admin/map-preview", icon: MapPinned },
+  { label: "Validasi Spasial", to: "/admin/validation", icon: CheckSquare },
 ];
 
 export default function AdminSidebar({ isCollapsed, onToggleSidebar }) {

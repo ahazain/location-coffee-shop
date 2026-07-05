@@ -1,7 +1,7 @@
 import { GeoJSON, MapContainer, TileLayer } from "react-leaflet";
 import { getSuitabilityColor } from "../../utils/mapStyle";
 
-export default function MapView({ geojson, selectedGridCode, onSelectGrid }) {
+export default function MapView({ geojson, boundaryGeojson, selectedGridCode, onSelectGrid }) {
   if (!geojson) {
     return (
       <div className="flex h-full items-center justify-center text-stone-500">
@@ -13,6 +13,19 @@ export default function MapView({ geojson, selectedGridCode, onSelectGrid }) {
   return (
     <MapContainer center={[-8.165, 113.72]} zoom={13} scrollWheelZoom className="h-full w-full rounded-3xl">
       <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+      {boundaryGeojson && (
+        <GeoJSON
+          data={boundaryGeojson}
+          style={() => ({
+            color: "#4f46e5",
+            weight: 2,
+            fillColor: "transparent",
+            fillOpacity: 0,
+            dashArray: "5, 5",
+          })}
+        />
+      )}
 
       <GeoJSON
         key={JSON.stringify(

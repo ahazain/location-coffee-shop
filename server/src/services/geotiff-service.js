@@ -25,6 +25,8 @@ class GeotiffService {
     const metadata = await GeotiffHelper.readMetadata(file.path);
     const storedPath = RasterDbUtil.normalizeStoredPath(file.path);
 
+    let oldFilePathToDelete = null;
+
     const result = await prisma.$transaction(async (tx) => {
       // LANGKAH 1: Validasi keberadaan indikator di database
       const indikator = await tx.indikator.findUnique({
@@ -33,10 +35,7 @@ class GeotiffService {
         },
         select: {
           id_indikator: true,
-          kode_indikator: true,
           nama_indikator: true,
-          jenis_indikator: true,
-          is_active: true,
         },
       });
 
@@ -44,210 +43,67 @@ class GeotiffService {
         throw new NotFoundError("Indikator tidak ditemukan.");
       }
 
-      // LANGKAH 2: Validasi status keaktifan indikator
-      if (!indikator.is_active) {
-        throw new BadRequestError("Indikator tidak aktif.");
-      }
-
-      // LANGKAH 3: Validasi jenis indikator (constraint diperbolehkan diunggah di sini)
-
       const tipeRaster = "raw";
 
-      // LANGKAH 4: Ambil nomor versi berikutnya (versi_lama + 1) untuk tipe raw ini
-      const nextVersion = await RasterDbUtil.getNextVersion(tx, {
+      // LANGKAH 2: Cari dan hapus DB record raster lama dengan tipe yang sama
+      oldFilePathToDelete = await RasterDbUtil.deleteExistingRaster(tx, {
         id_indikator: parsedIdIndikator,
         tipe_raster: tipeRaster,
       });
 
-      // LANGKAH 5: Nonaktifkan (is_active = false) raster tipe raw lama yang sedang aktif
-      await RasterDbUtil.deactivateActiveRaster(tx, {
-        id_indikator: parsedIdIndikator,
-        tipe_raster: tipeRaster,
-      });
-
-      // LANGKAH 6: Masukkan data metadata GeoTIFF baru yang diunggah ke database (is_active = true)
+      // LANGKAH 3: Masukkan data metadata GeoTIFF baru yang diunggah ke database
       const rasterLayer = await tx.rasterLayer.create({
         data: {
           id_indikator: parsedIdIndikator,
           tipe_raster: tipeRaster,
           file_path: storedPath,
-          original_filename: file.originalname,
           crs: metadata.crs,
-          resolution_x: metadata.resolution_x,
-          resolution_y: metadata.resolution_y,
-          width: metadata.width,
-          height: metadata.height,
-          band_count: metadata.band_count,
-          extent: metadata.extent,
           min_value: metadata.min_value,
           max_value: metadata.max_value,
           mean_value: metadata.mean_value,
-          std_value: metadata.std_value,
           nodata_value: metadata.nodata_value,
-          jumlah_pixel: metadata.jumlah_pixel,
-          jumlah_pixel_valid: metadata.jumlah_pixel_valid,
-          jumlah_pixel_nodata: metadata.jumlah_pixel_nodata,
-          versi: nextVersion,
-          is_active: true,
         },
       });
 
-      // LANGKAH 7: Kembalikan objek gabungan antara data indikator dan metadata raster yang sukses dibuat
+      // LANGKAH 4: Kembalikan objek respon
       return {
         id_raster_layer: rasterLayer.id_raster_layer,
         id_indikator: indikator.id_indikator,
-        kode_indikator: indikator.kode_indikator,
+        kode_indikator: String(indikator.id_indikator),
         nama_indikator: indikator.nama_indikator,
         tipe_raster: rasterLayer.tipe_raster,
         file_path: rasterLayer.file_path,
-        original_filename: rasterLayer.original_filename,
-        versi: rasterLayer.versi,
-        is_active: rasterLayer.is_active,
         metadata: {
           crs: rasterLayer.crs,
-          resolution_x: rasterLayer.resolution_x,
-          resolution_y: rasterLayer.resolution_y,
-          width: rasterLayer.width,
-          height: rasterLayer.height,
-          band_count: rasterLayer.band_count,
-          extent: rasterLayer.extent,
           min_value: rasterLayer.min_value,
           max_value: rasterLayer.max_value,
           mean_value: rasterLayer.mean_value,
-          std_value: rasterLayer.std_value,
           nodata_value: rasterLayer.nodata_value,
-          jumlah_pixel: rasterLayer.jumlah_pixel,
-          jumlah_pixel_valid: rasterLayer.jumlah_pixel_valid,
-          jumlah_pixel_nodata: rasterLayer.jumlah_pixel_nodata,
         },
       };
     });
+
+    // LANGKAH 5: Hapus berkas fisik raster lama dari penyimpanan setelah transaksi DB sukses
+    if (oldFilePathToDelete) {
+      const absolutePath = path.isAbsolute(oldFilePathToDelete)
+        ? oldFilePathToDelete
+        : path.join(process.cwd(), oldFilePathToDelete);
+
+      if (fs.existsSync(absolutePath)) {
+        try {
+          fs.unlinkSync(absolutePath);
+        } catch (err) {
+          console.warn(`  [WARNING] Gagal menghapus berkas fisik lama ${oldFilePathToDelete}: ${err.message}`);
+        }
+      }
+    }
 
     return result;
   }
 
   static async updateIndikatorRaw({ id_indikator, file }) {
-    if (!file) {
-      throw new BadRequestError("File GeoTIFF wajib diunggah.");
-    }
-
-    GeotiffHelper.validateExtension(file);
-
-    const parsedIdIndikator = RasterDbUtil.parseId(id_indikator, "ID indikator");
-
-    const metadata = await GeotiffHelper.readMetadata(file.path);
-    const storedPath = RasterDbUtil.normalizeStoredPath(file.path);
-
-    // 1. Ambil daftar raster yang ada untuk indikator ini sebelum dihapus
-    const existingRasters = await prisma.rasterLayer.findMany({
-      where: {
-        id_indikator: parsedIdIndikator,
-      },
-    });
-
-    const result = await prisma.$transaction(async (tx) => {
-      // LANGKAH 1: Validasi keberadaan indikator di database
-      const indikator = await tx.indikator.findUnique({
-        where: {
-          id_indikator: parsedIdIndikator,
-        },
-        select: {
-          id_indikator: true,
-          kode_indikator: true,
-          nama_indikator: true,
-          jenis_indikator: true,
-          is_active: true,
-        },
-      });
-
-      if (!indikator) {
-        throw new NotFoundError("Indikator tidak ditemukan.");
-      }
-
-      // LANGKAH 2: Validasi status keaktifan indikator
-      if (!indikator.is_active) {
-        throw new BadRequestError("Indikator tidak aktif.");
-      }
-
-      // LANGKAH 3: Hapus semua raster lama milik indikator ini dari DB
-      await tx.rasterLayer.deleteMany({
-        where: {
-          id_indikator: parsedIdIndikator,
-        },
-      });
-
-      const tipeRaster = "raw";
-      const version = 1; // Mulai dari 1 lagi karena yang lama sudah dihapus
-
-      // LANGKAH 4: Masukkan data metadata GeoTIFF baru yang diunggah ke database (is_active = true)
-      const rasterLayer = await tx.rasterLayer.create({
-        data: {
-          id_indikator: parsedIdIndikator,
-          tipe_raster: tipeRaster,
-          file_path: storedPath,
-          original_filename: file.originalname,
-          crs: metadata.crs,
-          resolution_x: metadata.resolution_x,
-          resolution_y: metadata.resolution_y,
-          width: metadata.width,
-          height: metadata.height,
-          band_count: metadata.band_count,
-          extent: metadata.extent,
-          min_value: metadata.min_value,
-          max_value: metadata.max_value,
-          mean_value: metadata.mean_value,
-          std_value: metadata.std_value,
-          nodata_value: metadata.nodata_value,
-          jumlah_pixel: metadata.jumlah_pixel,
-          jumlah_pixel_valid: metadata.jumlah_pixel_valid,
-          jumlah_pixel_nodata: metadata.jumlah_pixel_nodata,
-          versi: version,
-          is_active: true,
-        },
-      });
-
-      return {
-        id_raster_layer: rasterLayer.id_raster_layer,
-        id_indikator: indikator.id_indikator,
-        kode_indikator: indikator.kode_indikator,
-        nama_indikator: indikator.nama_indikator,
-        tipe_raster: rasterLayer.tipe_raster,
-        file_path: rasterLayer.file_path,
-        original_filename: rasterLayer.original_filename,
-        versi: rasterLayer.versi,
-        is_active: rasterLayer.is_active,
-        metadata: {
-          crs: rasterLayer.crs,
-          resolution_x: rasterLayer.resolution_x,
-          resolution_y: rasterLayer.resolution_y,
-          width: rasterLayer.width,
-          height: rasterLayer.height,
-          band_count: rasterLayer.band_count,
-          extent: rasterLayer.extent,
-          min_value: rasterLayer.min_value,
-          max_value: rasterLayer.max_value,
-          mean_value: rasterLayer.mean_value,
-          std_value: rasterLayer.std_value,
-          nodata_value: rasterLayer.nodata_value,
-          jumlah_pixel: rasterLayer.jumlah_pixel,
-          jumlah_pixel_valid: rasterLayer.jumlah_pixel_valid,
-          jumlah_pixel_nodata: rasterLayer.jumlah_pixel_nodata,
-        },
-      };
-    });
-
-    // LANGKAH 5: Hapus berkas fisik raster lama dari penyimpanan jika transaksi DB sukses
-    for (const oldRaster of existingRasters) {
-      const absolutePath = path.isAbsolute(oldRaster.file_path)
-        ? oldRaster.file_path
-        : path.join(process.cwd(), oldRaster.file_path);
-
-      if (fs.existsSync(absolutePath)) {
-        fs.unlinkSync(absolutePath);
-      }
-    }
-
-    return result;
+    // Dengan skema baru, update sama saja dengan upload (delete-then-insert)
+    return this.uploadIndikatorRaw({ id_indikator, file });
   }
 
   // ─────────────────────────────────────────────
@@ -255,7 +111,7 @@ class GeotiffService {
   // ─────────────────────────────────────────────
 
   /**
-   * Daftar semua raster layer untuk satu indikator (semua tipe & versi).
+   * Daftar semua raster layer untuk satu indikator (semua tipe).
    */
   static async listRasterByIndikator({ id_indikator }) {
     const parsedId = RasterDbUtil.parseId(id_indikator, "ID indikator");
@@ -264,9 +120,7 @@ class GeotiffService {
       where: { id_indikator: parsedId },
       select: {
         id_indikator: true,
-        kode_indikator: true,
         nama_indikator: true,
-        jenis_indikator: true,
       },
     });
 
@@ -276,7 +130,7 @@ class GeotiffService {
 
     const rasters = await prisma.rasterLayer.findMany({
       where: { id_indikator: parsedId },
-      orderBy: [{ tipe_raster: "asc" }, { versi: "desc" }],
+      orderBy: [{ tipe_raster: "asc" }],
     });
 
     return {
@@ -287,7 +141,7 @@ class GeotiffService {
   }
 
   /**
-   * Ambil raster layer aktif untuk tipe tertentu (raw atau fuzzy).
+   * Ambil raster layer untuk tipe tertentu (raw atau fuzzy).
    */
   static async getActiveRaster({ id_indikator, tipe_raster }) {
     const parsedId = RasterDbUtil.parseId(id_indikator, "ID indikator");
@@ -304,13 +158,12 @@ class GeotiffService {
       where: {
         id_indikator: parsedId,
         tipe_raster,
-        is_active: true,
       },
     });
 
     if (!raster) {
       throw new NotFoundError(
-        `Raster '${tipe_raster}' aktif untuk indikator ini tidak ditemukan.`,
+        `Raster '${tipe_raster}' untuk indikator ini tidak ditemukan.`,
       );
     }
 
@@ -346,7 +199,11 @@ class GeotiffService {
       : path.join(process.cwd(), raster.file_path);
 
     if (fs.existsSync(absolutePath)) {
-      fs.unlinkSync(absolutePath);
+      try {
+        fs.unlinkSync(absolutePath);
+      } catch (err) {
+        console.warn(`  [WARNING] Gagal menghapus file ${raster.file_path}: ${err.message}`);
+      }
     }
 
     return {

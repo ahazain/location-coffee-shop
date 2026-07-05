@@ -3,7 +3,7 @@ import LandingPage from "./pages/LandingPage";
 import PublicAhpPage from "./pages/PublicAhpPage";
 import PublicMapPage from "./pages/PublicMapPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
-import AdminDashboardPage from "./pages/AdminDashboardPage";
+import AdminRegisterPage from "./pages/adminRegisterPage";
 import AdminIndicatorsPage from "./pages/AdminIndicatorsPage";
 import AdminDatasetsPage from "./pages/AdminDatasetsPage";
 import AdminFuzzyPage from "./pages/AdminFuzzyPage";
@@ -11,6 +11,7 @@ import AdminAhpPage from "./pages/AdminAhpPage";
 import AdminWlcPage from "./pages/AdminWlcPage";
 import AdminMapPreviewPage from "./pages/AdminMapPreviewPage";
 import AdminKriteriaPage from "./pages/AdminKriteriaPage";
+import AdminValidationPage from "./pages/AdminValidationPage";
 
 export default function App() {
   return (
@@ -21,7 +22,10 @@ export default function App() {
         <Route path="/peta-rekomendasi" element={<PublicMapPage />} />
         <Route path="/map" element={<Navigate to="/peta-rekomendasi" replace />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
-        <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+        <Route path="/admin/register" element={<AdminRegisterPage />} />
+
+        <Route path="/admin" element={<Navigate to="/admin/datasets" replace />} />
+        <Route path="/admin/dashboard" element={<Navigate to="/admin/datasets" replace />} />
         <Route path="/admin/kriteria" element={<AdminKriteriaPage />} />
         <Route path="/admin/indicators" element={<AdminIndicatorsPage />} />
         <Route path="/admin/datasets" element={<AdminDatasetsPage />} />
@@ -29,6 +33,7 @@ export default function App() {
         <Route path="/admin/ahp" element={<AdminAhpPage />} />
         <Route path="/admin/wlc" element={<AdminWlcPage />} />
         <Route path="/admin/map-preview" element={<AdminMapPreviewPage />} />
+        <Route path="/admin/validation" element={<AdminValidationPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

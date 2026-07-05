@@ -97,8 +97,6 @@ class AHPService {
           kriteria: {
             select: {
               nama_kriteria: true,
-              kode_kriteria: true,
-              urutan: true,
             },
           },
         },
@@ -111,7 +109,6 @@ class AHPService {
           indikator: {
             select: {
               nama_indikator: true,
-              kode_indikator: true,
               id_kriteria: true,
             },
           },
@@ -154,7 +151,6 @@ class AHPService {
               select: {
                 id_indikator: true,
                 nama_indikator: true,
-                kode_indikator: true,
                 id_kriteria: true,
               },
             },
@@ -196,7 +192,7 @@ class AHPService {
 
       bobot_kriteria: bobotKriteria.map((b) => ({
         id_kriteria: b.id_kriteria,
-        kode: b.kriteria.kode_kriteria,
+        kode: String(b.id_kriteria),
         nama: b.kriteria.nama_kriteria,
         bobot: Number(b.bobot_kriteria),
       })),
@@ -210,7 +206,7 @@ class AHPService {
 
         return {
           id_indikator: b.id_indikator,
-          kode: b.indikator.kode_indikator,
+          kode: String(b.id_indikator),
           nama: b.indikator.nama_indikator,
           id_kriteria: b.indikator.id_kriteria,
 
@@ -237,12 +233,11 @@ class AHPService {
   static async getKriteriaItems() {
     const data = await prisma.kriteria.findMany({
       where: {
-        is_active: true,
+        NOT: {
+          id_kriteria: 6, // Pembatas Lahan is a constraint and doesn't participate in AHP
+        },
       },
       orderBy: [
-        {
-          urutan: "asc",
-        },
         {
           id_kriteria: "asc",
         },
@@ -253,10 +248,9 @@ class AHPService {
       total: data.length,
       items: data.map((item) => ({
         id: item.id_kriteria,
-        kode: item.kode_kriteria,
+        kode: String(item.id_kriteria),
         nama: item.nama_kriteria,
         deskripsi: item.deskripsi,
-        urutan: item.urutan,
       })),
     };
   }
@@ -267,13 +261,12 @@ class AHPService {
         id_kriteria: {
           in: itemIds,
         },
-        is_active: true,
       },
     });
 
     if (data.length !== itemIds.length) {
       throw new BadRequestError(
-        "Sebagian kriteria tidak ditemukan atau tidak aktif.",
+        "Sebagian kriteria tidak ditemukan.",
       );
     }
 
@@ -425,12 +418,8 @@ class AHPService {
     const data = await prisma.indikator.findMany({
       where: {
         id_kriteria: parsedIdKriteria,
-        is_active: true,
       },
       orderBy: [
-        {
-          urutan: "asc",
-        },
         {
           id_indikator: "asc",
         },
@@ -440,17 +429,14 @@ class AHPService {
     return {
       kriteria: {
         id: kriteria.id_kriteria,
-        kode: kriteria.kode_kriteria,
         nama: kriteria.nama_kriteria,
       },
       total: data.length,
       items: data.map((item) => ({
         id: item.id_indikator,
-        kode: item.kode_indikator,
+        kode: String(item.id_indikator),
         nama: item.nama_indikator,
         satuan: item.satuan,
-        jenis_indikator: item.jenis_indikator,
-        urutan: item.urutan,
       })),
     };
   }
@@ -462,13 +448,12 @@ class AHPService {
         id_indikator: {
           in: itemIds,
         },
-        is_active: true,
       },
     });
 
     if (data.length !== itemIds.length) {
       throw new BadRequestError(
-        "Sebagian indikator tidak ditemukan, tidak aktif, atau tidak berada pada kriteria tersebut.",
+        "Sebagian indikator tidak ditemukan atau tidak berada pada kriteria tersebut.",
       );
     }
 
@@ -651,7 +636,11 @@ class AHPService {
 
   static async recalculateConsensusKriteriaAHP() {
     const kriteriaList = await prisma.kriteria.findMany({
-      where: { is_active: true },
+      where: {
+        NOT: {
+          id_kriteria: 6, // Pembatas Lahan is a constraint and doesn't participate in AHP
+        },
+      },
       select: { id_kriteria: true },
     });
 
@@ -718,7 +707,7 @@ class AHPService {
 
   static async recalculateConsensusIndikatorAHP(idKriteria) {
     const indikatorList = await prisma.indikator.findMany({
-      where: { id_kriteria: idKriteria, is_active: true },
+      where: { id_kriteria: idKriteria },
       select: { id_indikator: true },
     });
 

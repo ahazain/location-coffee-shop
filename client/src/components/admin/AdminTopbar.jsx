@@ -1,10 +1,10 @@
 import { useLocation } from "react-router-dom";
 
 const pageTitles = {
-  "/admin/dashboard": {
-    title: "Dashboard",
-    subtitle: "Ringkasan data dan aktivitas analisis.",
-  },
+  // "/admin/dashboard": {
+  //   title: "Dashboard",
+  //   subtitle: "Ringkasan data dan aktivitas analisis.",
+  // },
   "/admin/datasets": {
     title: "Unggah Data",
     subtitle: "Manajemen dan pembaharuan indikator operasional perusahaan.",

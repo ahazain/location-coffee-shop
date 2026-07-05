@@ -6,6 +6,30 @@ const { BadRequestError, NotFoundError } = require("../utils/error-handling-util
 
 class WlcService {
   /**
+   * Pemetaan manual ID indikator ke string kode untuk response nilai_indikator di frontend.
+   */
+  static mapIndikatorIdToKode(id) {
+    const mapping = {
+      1: "kepadatan_layanan_makan_non_coffee",
+      2: "kepadatan_layanan_olahraga_rekreasi",
+      3: "kepadatan_hunian",
+      4: "kedekatan_pusat_belanja",
+      5: "kepadatan_kampus_fasilitas_pendidikan",
+      6: "kepadatan_kantor_jasa_keuangan_bisnis",
+      7: "intensitas_cahaya_malam",
+      8: "kepadatan_populasi",
+      9: "jarak_jalan_utama",
+      10: "kedekatan_simpul_transportasi",
+      11: "kepadatan_simpang_jalan",
+      12: "kepadatan_coffee_shop_existing",
+      13: "jarak_coffee_shop_existing_terdekat",
+      14: "sawah",
+      15: "sempadan_sungai",
+    };
+    return mapping[id] || `indikator_${id}`;
+  }
+
+  /**
    * Mengamankan keberadaan grid sel 29x33 di database PostGIS jika tabel kosong.
    */
   static async ensureGridsExist(refRaster) {
@@ -50,6 +74,38 @@ class WlcService {
     });
 
     console.log(`[WLC] Berhasil menginisialisasi ${grids.length} grid spasial.`);
+
+    // Pemetaan kecamatan & kelurahan otomatis dari GeoJSON
+    try {
+      const geojsonPath = path.join(__dirname, "../prisma/seeder/batas_wilayah.geojson");
+      if (fs.existsSync(geojsonPath)) {
+        console.log("[WLC] Memetakan kecamatan & kelurahan dari GeoJSON...");
+        const rawData = fs.readFileSync(geojsonPath, "utf-8");
+        const geojson = JSON.parse(rawData);
+
+        for (const feature of geojson.features) {
+          const kecamatan = feature.properties.WADMKC;
+          const kelurahan = feature.properties.WADMKD;
+          if (kecamatan && kelurahan) {
+            const geomStr = JSON.stringify(feature.geometry);
+            await prisma.$executeRawUnsafe(
+              `UPDATE grid
+               SET kecamatan = $1, kelurahan = $2
+               WHERE ST_Intersects(ST_SetSRID(ST_GeomFromGeoJSON($3), 32749), ST_Centroid(geom))`
+              ,
+              kecamatan,
+              kelurahan,
+              geomStr
+            );
+          }
+        }
+        console.log("[WLC] Pemetaan kecamatan & kelurahan selesai.");
+      } else {
+        console.log("[WLC] Peringatan: batas_wilayah.geojson tidak ditemukan, data kecamatan/kelurahan bernilai null.");
+      }
+    } catch (error) {
+      console.error("[WLC] Gagal memetakan kecamatan & kelurahan dari GeoJSON:", error.message);
+    }
   }
 
   /**
@@ -84,34 +140,31 @@ class WlcService {
       );
     }
 
-    // 2. Ambil seluruh indikator aktif
-    const activeIndicators = await prisma.indikator.findMany({
-      where: { is_active: true }
-    });
+    // 2. Ambil seluruh indikator
+    const activeIndicators = await prisma.indikator.findMany();
 
     if (activeIndicators.length === 0) {
-      throw new BadRequestError("Tidak ada indikator aktif yang terdaftar di database.");
+      throw new BadRequestError("Tidak ada indikator yang terdaftar di database.");
     }
 
-    // 3. Baca data piksel untuk setiap raster aktif (Fuzzy dan Raw)
+    // 3. Baca data piksel untuk setiap raster (Fuzzy dan Raw)
     const fuzzyRastersData = [];
     const rawRastersData = [];
     let refRaster = null;
 
     for (const ind of activeIndicators) {
-      const isConstraint = ind.jenis_indikator === "constraint";
+      const isConstraint = ind.tipe_nilai === "mask";
 
       // A. Muat Raw Raster (untuk ekstraksi nilai asli di pop-up dan constraint masking)
       const rawRaster = await prisma.rasterLayer.findFirst({
         where: {
           id_indikator: ind.id_indikator,
           tipe_raster: "raw",
-          is_active: true
         }
       });
 
       if (!rawRaster) {
-        throw new BadRequestError(`Berkas raster raw untuk indikator "${ind.nama_indikator}" belum aktif atau tidak ditemukan.`);
+        throw new BadRequestError(`Berkas raster raw untuk indikator "${ind.nama_indikator}" tidak ditemukan.`);
       }
 
       const rawAbsPath = path.isAbsolute(rawRaster.file_path)
@@ -123,29 +176,30 @@ class WlcService {
       }
 
       const rawPixels = await GeotiffHelper.readPixelsForFuzzy(rawAbsPath);
+      const rawMetadata = await GeotiffHelper.readMetadataOnly(rawAbsPath);
+
       const rawDataObj = {
         id_indikator: ind.id_indikator,
-        kode_indikator: ind.kode_indikator,
-        jenis: ind.jenis_indikator,
+        kode_indikator: this.mapIndikatorIdToKode(ind.id_indikator),
+        jenis: ind.tipe_nilai,
         pixelValues: rawPixels.pixelValues,
         width: rawPixels.width,
         height: rawPixels.height,
         noDataValue: rawPixels.noDataValue,
-        min_x: Number(rawRaster.extent.min_x),
-        max_y: Number(rawRaster.extent.max_y),
-        res_x: Number(rawRaster.resolution_x),
-        res_y: Number(rawRaster.resolution_y),
+        min_x: Number(rawMetadata.extent.min_x),
+        max_y: Number(rawMetadata.extent.max_y),
+        res_x: Number(rawMetadata.resolution_x),
+        res_y: Number(rawMetadata.resolution_y),
         absPath: rawAbsPath
       };
       rawRastersData.push(rawDataObj);
 
-      // B. Muat Fuzzy Raster (hanya untuk indikator kriteria non-constraint 1 s.d 13)
+      // B. Muat Fuzzy Raster (hanya untuk indikator kriteria non-constraint)
       if (!isConstraint) {
         const fuzzyRaster = await prisma.rasterLayer.findFirst({
           where: {
             id_indikator: ind.id_indikator,
             tipe_raster: "fuzzy",
-            is_active: true
           }
         });
 
@@ -164,6 +218,7 @@ class WlcService {
         }
 
         const fuzzyPixels = await GeotiffHelper.readPixelsForFuzzy(fuzzyAbsPath);
+        const fuzzyMetadata = await GeotiffHelper.readMetadataOnly(fuzzyAbsPath);
         
         // Cari bobot akhir indikator ini
         const wRecord = weights.find(w => w.id_indikator === ind.id_indikator);
@@ -171,15 +226,15 @@ class WlcService {
 
         fuzzyRastersData.push({
           id_indikator: ind.id_indikator,
-          kode_indikator: ind.kode_indikator,
+          kode_indikator: this.mapIndikatorIdToKode(ind.id_indikator),
           pixelValues: fuzzyPixels.pixelValues,
           width: fuzzyPixels.width,
           height: fuzzyPixels.height,
           noDataValue: fuzzyPixels.noDataValue,
-          min_x: Number(fuzzyRaster.extent.min_x),
-          max_y: Number(fuzzyRaster.extent.max_y),
-          res_x: Number(fuzzyRaster.resolution_x),
-          res_y: Number(fuzzyRaster.resolution_y),
+          min_x: Number(fuzzyMetadata.extent.min_x),
+          max_y: Number(fuzzyMetadata.extent.max_y),
+          res_x: Number(fuzzyMetadata.resolution_x),
+          res_y: Number(fuzzyMetadata.resolution_y),
           weight,
           absPath: fuzzyAbsPath
         });
@@ -195,7 +250,7 @@ class WlcService {
       refRaster = rawRastersData[0];
     }
 
-    // 4. Pastikan grid sel PostGIS sudah terisi
+    // 4. Pastikan grid PostGIS sudah terisi
     await this.ensureGridsExist(refRaster);
 
     const refWidth = refRaster.width;
@@ -205,7 +260,7 @@ class WlcService {
     const refResX = refRaster.res_x;
     const refResY = refRaster.res_y;
 
-    const wlcValues = new Array(refWidth * refHeight).fill(0.0);
+    const wlcValues = new Array(refWidth * refHeight).fill(-9999.0);
     const gridScores = [];
 
     // Helper untuk mensample nilai pixel di koordinat geografis (x, y) dari dataset raster
@@ -226,7 +281,7 @@ class WlcService {
           }
         }
       }
-      return 0.0;
+      return null;
     };
 
     // 5. Hitung WLC per sel grid acuan
@@ -239,14 +294,36 @@ class WlcService {
         const x = refMinX + (c + 0.5) * refResX;
         const y = refMaxY - (r + 0.5) * refResY;
 
+        // Cek apakah koordinat berada di dalam wilayah studi (nilai reference raster tidak null/nodata)
+        const refVal = sampleRasterAt(refRaster, x, y);
+        if (refVal === null) {
+          wlcValues[gridIndex] = -9999.0;
+          continue;
+        }
+
         // A. Ekstraksi seluruh nilai raw asli indikator untuk data pop-up peta
         const nilaiIndikatorRaw = {};
         for (const rdRaw of rawRastersData) {
           const rawVal = sampleRasterAt(rdRaw, x, y);
-          // Simpan nilai biner 0/1 untuk constraint, desimal dibulatkan 3 angka di belakang koma untuk kemudahan pembacaan
-          nilaiIndikatorRaw[rdRaw.kode_indikator] = rdRaw.jenis === "constraint"
-            ? (rawVal <= 0 ? 0 : 1)
-            : Number(rawVal.toFixed(3));
+          // Jika diluar cropped bounding box, fallback ke 0
+          const val = rawVal !== null ? rawVal : 0.0;
+          
+          nilaiIndikatorRaw[rdRaw.kode_indikator] = rdRaw.jenis === "mask"
+            ? (val <= 0 ? 0 : 1)
+            : Number(val.toFixed(3));
+
+          // Dapatkan nilai fuzzy-nya
+          let fuzzyVal = 0.0;
+          if (rdRaw.jenis === "mask") {
+            fuzzyVal = val <= 0 ? 0.0 : 1.0;
+          } else {
+            const rdFuzzy = fuzzyRastersData.find(f => f.id_indikator === rdRaw.id_indikator);
+            if (rdFuzzy) {
+              const fVal = sampleRasterAt(rdFuzzy, x, y);
+              fuzzyVal = fVal !== null ? fVal : 0.0;
+            }
+          }
+          nilaiIndikatorRaw["fuzzy_" + rdRaw.kode_indikator] = Number(fuzzyVal.toFixed(3));
         }
 
         // B. Kalkulasi WLC menggunakan fuzzy rasters
@@ -257,15 +334,18 @@ class WlcService {
         // B1. Kriteria standard
         for (const rdFuzzy of fuzzyRastersData) {
           const fuzzyVal = sampleRasterAt(rdFuzzy, x, y);
-          scoreSum += fuzzyVal * rdFuzzy.weight;
+          // Jika diluar cropped bounding box, fallback ke 0.0
+          const val = fuzzyVal !== null ? fuzzyVal : 0.0;
+          scoreSum += val * rdFuzzy.weight;
           weightSum += rdFuzzy.weight;
         }
 
         // B2. Constraint mask (Indikator 14 sawah dan Indikator 15 sempadan_sungai)
-        const constraintRasters = rawRastersData.filter(rd => rd.jenis === "constraint");
+        const constraintRasters = rawRastersData.filter(rd => rd.jenis === "mask");
         for (const rdConst of constraintRasters) {
           const rawVal = sampleRasterAt(rdConst, x, y);
-          const constraintVal = rawVal <= 0 ? 0.0 : 1.0;
+          // Jika diluar cropped bounding box, constraintVal = 1.0 (boleh/tidak melanggar)
+          const constraintVal = rawVal !== null ? (rawVal <= 0 ? 0.0 : 1.0) : 1.0;
           constraintProduct *= constraintVal;
         }
 
@@ -318,34 +398,25 @@ class WlcService {
     const finalMetadata = await GeotiffHelper.readMetadataOnly(finalAbsPath);
 
     // 8. Simpan run log, raster layer, dan hasil WLC per grid ke DB (Transaction)
+    let filePathsToUnlink = [];
+
     const result = await prisma.$transaction(async (tx) => {
-      // Dapatkan versi baru
-      const agg = await tx.rasterLayer.aggregate({
-        where: { tipe_raster: "final_score" },
-        _max: { versi: true }
+      // Cari dan hapus DB record AnalysisRun dan RasterLayer final_score lama, simpan file_path
+      const oldRasters = await tx.rasterLayer.findMany({
+        where: { tipe_raster: "final_score" }
       });
-      const nextVersi = agg._max.versi ? agg._max.versi + 1 : 1;
+      filePathsToUnlink = oldRasters.map(r => r.file_path);
 
-      // Deaktivasi run dan layer final_score lama
-      await tx.analysisRun.updateMany({
-        where: { tipe_run: "default", is_active: true },
-        data: { is_active: false }
-      });
-
-      await tx.rasterLayer.updateMany({
-        where: { tipe_raster: "final_score", is_active: true },
-        data: { is_active: false }
+      await tx.analysisRun.deleteMany({});
+      await tx.rasterLayer.deleteMany({
+        where: { tipe_raster: "final_score" }
       });
 
       // Buat Run baru
       const newRun = await tx.analysisRun.create({
         data: {
-          tipe_run: "default",
-          nama_run: `WLC Run v${nextVersi}`,
+          nama_run: `WLC Run ${new Date().toLocaleString()}`,
           status: "success",
-          keterangan: "Kalkulasi WLC konsensus rata-rata pakar utama",
-          versi: nextVersi,
-          is_active: true
         }
       });
 
@@ -356,24 +427,11 @@ class WlcService {
           id_analysis_run: newRun.id_analysis_run,
           tipe_raster: "final_score",
           file_path: finalRelPath,
-          original_filename: fileName,
           crs: finalMetadata.crs,
-          resolution_x: finalMetadata.resolution_x,
-          resolution_y: finalMetadata.resolution_y,
-          width: finalMetadata.width,
-          height: finalMetadata.height,
-          band_count: finalMetadata.band_count,
-          extent: finalMetadata.extent,
           min_value: finalMetadata.min_value,
           max_value: finalMetadata.max_value,
           mean_value: finalMetadata.mean_value,
-          std_value: finalMetadata.std_value,
-          nodata_value: finalMetadata.nodata_value,
-          jumlah_pixel: finalMetadata.jumlah_pixel,
-          jumlah_pixel_valid: finalMetadata.jumlah_pixel_valid,
-          jumlah_pixel_nodata: finalMetadata.jumlah_pixel_nodata,
-          versi: nextVersi,
-          is_active: true
+          nodata_value: -9999,
         }
       });
 
@@ -409,17 +467,31 @@ class WlcService {
       };
     });
 
+    // 9. Hapus file fisik raster lama dari penyimpanan setelah transaksi DB sukses
+    for (const filePath of filePathsToUnlink) {
+      const absolutePath = path.isAbsolute(filePath)
+        ? filePath
+        : path.join(process.cwd(), filePath);
+
+      if (fs.existsSync(absolutePath)) {
+        try {
+          fs.unlinkSync(absolutePath);
+        } catch (err) {
+          console.warn(`  [WARNING] Gagal menghapus file final_score lama ${filePath}: ${err.message}`);
+        }
+      }
+    }
+
     return result;
   }
 
   /**
-   * Mengambil berkas raster WLC final_score yang sedang aktif
+   * Mengambil berkas raster WLC final_score yang aktif
    */
   static async getActiveWlc() {
     const active = await prisma.rasterLayer.findFirst({
       where: {
         tipe_raster: "final_score",
-        is_active: true
       }
     });
 
@@ -427,19 +499,40 @@ class WlcService {
       throw new NotFoundError("Hasil kalkulasi WLC belum tersedia.");
     }
 
-    return active;
+    const result = {
+      ...active,
+      versi: active.id_analysis_run,
+      width: null,
+      height: null,
+      jumlah_pixel: null
+    };
+
+    try {
+      const absolutePath = path.isAbsolute(active.file_path)
+        ? active.file_path
+        : path.join(process.cwd(), active.file_path);
+
+      if (fs.existsSync(absolutePath)) {
+        const metadata = await GeotiffHelper.readMetadataOnly(absolutePath);
+        result.width = metadata.width;
+        result.height = metadata.height;
+        result.jumlah_pixel = metadata.jumlah_pixel;
+      }
+    } catch (err) {
+      console.error("Gagal membaca metadata GeoTIFF WLC aktif:", err.message);
+    }
+
+    return result;
   }
 
   /**
    * Mengambil seluruh grid spasial PostGIS yang digabungkan dengan skor WLC aktif,
-   * lalu mentransformasikan geom (SRID 32749) ke WGS84 (SRID 4326) dalam format GeoJSON.
+   * HANYA grid yang berada DI DALAM wilayah studi (memiliki kecamatan & kelurahan terisi).
+   * Mentransformasikan geom (SRID 32749) ke WGS84 (SRID 4326) dalam format GeoJSON.
    */
   static async getWlcGrids() {
     const activeRun = await prisma.analysisRun.findFirst({
-      where: {
-        tipe_run: "default",
-        is_active: true
-      }
+      orderBy: { id_analysis_run: "desc" }
     });
 
     if (!activeRun) {
@@ -447,8 +540,9 @@ class WlcService {
     }
 
     // Gunakan raw query untuk mengekstrak geometri PostGIS ke GeoJSON EPSG 4326 beserta data nilai indikator
+    // HANYA grid yang BERADA DI DALAM wilayah studi (memiliki kecamatan terisi)
     const rawData = await prisma.$queryRawUnsafe(`
-      SELECT 
+      SELECT
         g.id_grid,
         g.kode_grid,
         g.kecamatan,
@@ -461,6 +555,7 @@ class WlcService {
       FROM grid g
       INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
       WHERE h.id_analysis_run = $1
+        AND g.kecamatan IS NOT NULL  -- Hanya grid di dalam wilayah studi
       ORDER BY g.id_grid ASC
     `, activeRun.id_analysis_run);
 
@@ -483,6 +578,18 @@ class WlcService {
       type: "FeatureCollection",
       features
     };
+  }
+
+  /**
+   * Mengambil GeoJSON batas wilayah studi asli untuk divisualisasikan garis batasnya di Leaflet.
+   */
+  static async getBoundaryGeoJson() {
+    const geojsonPath = path.join(__dirname, "../prisma/seeder/batas_wilayah.geojson");
+    if (!fs.existsSync(geojsonPath)) {
+      throw new NotFoundError("File batas_wilayah.geojson tidak ditemukan.");
+    }
+    const rawData = fs.readFileSync(geojsonPath, "utf-8");
+    return JSON.parse(rawData);
   }
 }
 

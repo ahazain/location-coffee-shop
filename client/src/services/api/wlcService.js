@@ -15,4 +15,16 @@ export const wlcService = {
   async getGrids() {
     return await apiClient.get("/wlc/grids");
   },
+
+  async getBoundary() {
+    return await apiClient.get("/wlc/boundary");
+  },
+
+  async getValidationStats() {
+    return await apiClient.get("/wlc/validation/stats");
+  },
+
+  async getValidationPoints() {
+    return await apiClient.get("/wlc/validation/points");
+  },
 };

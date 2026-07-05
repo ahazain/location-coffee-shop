@@ -18,38 +18,23 @@ class KriteriaService {
   static formatKriteria(kriteria) {
     return {
       id: kriteria.id_kriteria,
-      kode_kriteria: kriteria.kode_kriteria,
+      kode_kriteria: String(kriteria.id_kriteria),
       nama_kriteria: kriteria.nama_kriteria,
       deskripsi: kriteria.deskripsi,
-      urutan: kriteria.urutan,
-      is_active: kriteria.is_active,
       created_at: kriteria.created_at,
       updated_at: kriteria.updated_at,
     };
   }
 
-  static async createKriteria({ kode_kriteria, nama_kriteria, deskripsi, urutan }) {
+  static async createKriteria({ nama_kriteria, deskripsi }) {
     if (!nama_kriteria || nama_kriteria.trim() === "") {
       throw new BadRequestError("Nama kriteria wajib diisi.");
     }
 
-    if (kode_kriteria) {
-      const existingKode = await prisma.kriteria.findUnique({
-        where: { kode_kriteria },
-      });
-
-      if (existingKode) {
-        throw new BadRequestError("Kode kriteria sudah digunakan.");
-      }
-    }
-
     const created = await prisma.kriteria.create({
       data: {
-        kode_kriteria,
         nama_kriteria,
         deskripsi,
-        urutan,
-        is_active: true,
       },
     });
 
@@ -59,7 +44,6 @@ class KriteriaService {
   static async getAllKriteria() {
     const data = await prisma.kriteria.findMany({
       orderBy: [
-        { urutan: "asc" },
         { id_kriteria: "asc" },
       ],
     });
@@ -78,7 +62,6 @@ class KriteriaService {
       include: {
         indikator: {
           orderBy: [
-            { urutan: "asc" },
             { id_indikator: "asc" },
           ],
         },
@@ -93,12 +76,9 @@ class KriteriaService {
       ...this.formatKriteria(kriteria),
       indikator: kriteria.indikator.map((item) => ({
         id: item.id_indikator,
-        kode_indikator: item.kode_indikator,
+        kode_indikator: String(item.id_indikator),
         nama_indikator: item.nama_indikator,
         satuan: item.satuan,
-        jenis_indikator: item.jenis_indikator,
-        urutan: item.urutan,
-        is_active: item.is_active,
       })),
     };
   }
@@ -114,30 +94,17 @@ class KriteriaService {
       throw new NotFoundError("Kriteria tidak ditemukan.");
     }
 
-    const { kode_kriteria, nama_kriteria, deskripsi, urutan, is_active } = payload;
+    const { nama_kriteria, deskripsi } = payload;
 
     if (nama_kriteria !== undefined && nama_kriteria.trim() === "") {
       throw new BadRequestError("Nama kriteria tidak boleh kosong.");
     }
 
-    if (kode_kriteria && kode_kriteria !== existing.kode_kriteria) {
-      const existingKode = await prisma.kriteria.findUnique({
-        where: { kode_kriteria },
-      });
-
-      if (existingKode) {
-        throw new BadRequestError("Kode kriteria sudah digunakan.");
-      }
-    }
-
     const updated = await prisma.kriteria.update({
       where: { id_kriteria },
       data: {
-        kode_kriteria,
         nama_kriteria,
         deskripsi,
-        urutan,
-        is_active,
       },
     });
 
@@ -155,14 +122,11 @@ class KriteriaService {
       throw new NotFoundError("Kriteria tidak ditemukan.");
     }
 
-    const updated = await prisma.kriteria.update({
+    const deleted = await prisma.kriteria.delete({
       where: { id_kriteria },
-      data: {
-        is_active: false,
-      },
     });
 
-    return this.formatKriteria(updated);
+    return this.formatKriteria(deleted);
   }
 }
 

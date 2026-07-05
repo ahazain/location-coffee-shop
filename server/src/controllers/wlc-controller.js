@@ -28,6 +28,15 @@ class WlcController {
       ResponseHelper.error(res, error);
     }
   }
+
+  static async getBoundary(req, res) {
+    try {
+      const data = await WlcService.getBoundaryGeoJson();
+      ResponseHelper.success(res, data, "Data batas wilayah berhasil diambil.");
+    } catch (error) {
+      ResponseHelper.error(res, error);
+    }
+  }
 }
 
 module.exports = WlcController;

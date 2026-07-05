@@ -37,16 +37,17 @@ model User {
 | Grid menjadi unit tampilan hasil akhir.
 | Geometry disarankan EPSG:32749 karena raster penelitian memakai UTM Zone 49S.
 | Jika frontend butuh GeoJSON 4326, lakukan ST_Transform(geom, 4326) di API.
+| Catatan: luas_grid TIDAK disimpan di DB, hitung langsung via ST_Area(geom)
+| agar tidak ada risiko data tidak sinkron dengan geometry.
 |--------------------------------------------------------------------------
 */
 
 model Grid {
-  id_grid   Int      @id @default(autoincrement())
-  kode_grid String   @unique @db.VarChar(50)
+  id_grid   Int     @id @default(autoincrement())
+  kode_grid String  @unique @db.VarChar(50)
 
-  kecamatan String?  @db.VarChar(100)
-  kelurahan String?  @db.VarChar(100)
-  luas_grid Decimal? @db.Decimal(15, 6)
+  kecamatan String? @db.VarChar(100)
+  kelurahan String? @db.VarChar(100)
 
   geom Unsupported("geometry(Polygon,32749)")
 
@@ -66,11 +67,8 @@ model Grid {
 
 model Kriteria {
   id_kriteria   Int      @id @default(autoincrement())
-  kode_kriteria String?  @unique @db.VarChar(50)
   nama_kriteria String   @db.VarChar(100)
   deskripsi     String?  @db.Text
-  urutan        Int?
-  is_active     Boolean  @default(true)
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
@@ -88,23 +86,15 @@ model Kriteria {
 }
 
 model Indikator {
-  id_indikator    Int      @id @default(autoincrement())
-  id_kriteria     Int
-  kode_indikator  String?  @unique @db.VarChar(50)
-  nama_indikator  String   @db.VarChar(150)
-  satuan          String?  @db.VarChar(50)
+  id_indikator   Int      @id @default(autoincrement())
+  id_kriteria    Int
+  nama_indikator String   @db.VarChar(150)
+  satuan         String?  @db.VarChar(50)
 
-  // Contoh: benefit, cost, competition, constraint
-  jenis_indikator String?  @db.VarChar(50)
-
-  // Menjelaskan hasil preprocessing QGIS
-  tipe_nilai        String? @db.VarChar(50) // kepadatan, jarak, intensitas, mask
-  sumber_data       String? @db.Text
-  metode_pengolahan String? @db.Text
+  // Menjelaskan bentuk nilai raster: kepadatan, jarak, intensitas, mask
+  tipe_nilai String? @db.VarChar(50)
 
   deskripsi  String?  @db.Text
-  urutan     Int?
-  is_active  Boolean  @default(true)
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -117,8 +107,6 @@ model Indikator {
   ahp_indikator_1 AhpIndikatorMatrix[] @relation("AhpIndikator1")
   ahp_indikator_2 AhpIndikatorMatrix[] @relation("AhpIndikator2")
 
-  simulasi_bobot_indikator SimulasiBobotIndikator[]
-
   @@index([id_kriteria])
   @@map("indikator")
 }
@@ -128,45 +116,38 @@ model Indikator {
 | 4. RASTER LAYER / GEOTIFF
 |--------------------------------------------------------------------------
 | Semua GeoTIFF raw, fuzzy, mask, dan final_score dicatat di tabel ini.
-| File tetap disimpan di storage, database hanya menyimpan metadata.
+| File tetap disimpan di storage, database hanya menyimpan metadata penting.
+|
+| Tidak ada kolom "versi" / "is_active": update = hapus record lama (dan
+| file fisiknya), lalu insert record baru. Constraint unique memastikan
+| hanya ada 1 raster aktif per indikator + tipe_raster.
+|
+| Metadata teknis (resolution, width, height, band_count, extent, std_value,
+| jumlah_pixel*) TIDAK disimpan di DB -- baca langsung dari file GeoTIFF
+| via GDAL/rasterio saat dibutuhkan.
 |--------------------------------------------------------------------------
 */
 
 model RasterLayer {
-  id_raster_layer Int  @id @default(autoincrement())
+  id_raster_layer Int @id @default(autoincrement())
 
   // Untuk raw dan fuzzy indikator, id_indikator terisi.
   // Untuk final_score, id_indikator boleh null.
-  id_indikator    Int?
+  id_indikator Int?
 
-  // Untuk raster hasil WLC, bisa dikaitkan ke proses analisis.
+  // Untuk raster hasil WLC, dikaitkan ke proses analisis (selalu yang terbaru).
   id_analysis_run Int?
 
   // raw, fuzzy, mask, final_score
   tipe_raster String @db.VarChar(30)
 
-  file_path         String
-  original_filename String?
+  file_path String
 
   crs          String? @db.VarChar(50)
-  resolution_x Float?
-  resolution_y Float?
-  width        Int?
-  height       Int?
-  band_count   Int?
-  extent       Json?
-
-  min_value           Float?
-  max_value           Float?
-  mean_value          Float?
-  std_value           Float?
-  nodata_value        Float?
-  jumlah_pixel        Int?
-  jumlah_pixel_valid  Int?
-  jumlah_pixel_nodata Int?
-
-  versi     Int     @default(1)
-  is_active Boolean @default(true)
+  min_value    Float?
+  max_value    Float?
+  mean_value   Float?
+  nodata_value Float?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -174,17 +155,19 @@ model RasterLayer {
   indikator    Indikator?   @relation(fields: [id_indikator], references: [id_indikator], onDelete: SetNull)
   analysis_run AnalysisRun? @relation(fields: [id_analysis_run], references: [id_analysis_run], onDelete: SetNull)
 
-  @@unique([id_indikator, tipe_raster, versi])
+  @@unique([id_indikator, tipe_raster])
   @@index([id_indikator])
   @@index([id_analysis_run])
   @@index([tipe_raster])
-  @@index([is_active])
   @@map("raster_layers")
 }
 
 /*
 |--------------------------------------------------------------------------
 | 5. ATURAN FUZZY
+|--------------------------------------------------------------------------
+| Field triangular/trapezoid (nilai_a/b/c/d) dihapus karena belum dipakai
+| (YAGNI) -- tambahkan lagi via migration kalau nanti benar-benar dibutuhkan.
 |--------------------------------------------------------------------------
 */
 
@@ -206,13 +189,6 @@ model AturanFuzzy {
   midpoint Decimal? @db.Decimal(18, 6)
   spread   Decimal? @db.Decimal(18, 6)
 
-  // Cadangan jika nanti memakai triangular/trapezoid
-  nilai_a Decimal? @db.Decimal(18, 6)
-  nilai_b Decimal? @db.Decimal(18, 6)
-  nilai_c Decimal? @db.Decimal(18, 6)
-  nilai_d Decimal? @db.Decimal(18, 6)
-
-  keterangan String? @db.Text
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -318,7 +294,7 @@ model BobotIndikator {
   // Bobot lokal dalam kriteria
   bobot_lokal Decimal @db.Decimal(10, 6)
 
-  // Bobot akhir = bobot kriteria × bobot lokal indikator
+  // Bobot akhir = bobot kriteria x bobot lokal indikator
   bobot_akhir Decimal @db.Decimal(10, 6)
 
   created_at DateTime @default(now())
@@ -360,38 +336,35 @@ model AhpKonsistensi {
 
 /*
 |--------------------------------------------------------------------------
-| 9. ANALYSIS RUN / RIWAYAT PERHITUNGAN WLC
+| 9. ANALYSIS RUN / PROSES PERHITUNGAN WLC (SELALU YANG TERBARU)
 |--------------------------------------------------------------------------
-| Dipakai untuk menyimpan versi hasil WLC.
-| Jika ada update GeoTIFF, sistem membuat analysis run baru.
+| Tidak ada riwayat run. Setiap kali ada perubahan (bobot AHP baru, raster
+| diupdate, dll), sistem menghitung ulang WLC dari awal:
+|   1. Hapus AnalysisRun lama -> cascade hapus HasilWlc lama,
+|      RasterLayer final_score terkait jadi id_analysis_run = NULL.
+|   2. Insert AnalysisRun baru.
+|   3. Insert ulang HasilWlc untuk AnalysisRun baru.
+|   4. Update RasterLayer final_score -> arahkan ke AnalysisRun baru.
+| Hasilnya di DB selalu hanya ada 1 AnalysisRun yang merepresentasikan
+| kondisi final/resmi saat ini -- bukan riwayat.
+|
+| Simulasi bobot oleh GUEST tidak masuk ke sini sama sekali -- itu murni
+| di sisi client (localStorage per device), backend hanya menyediakan
+| endpoint stateless untuk hitung ulang WLC on-the-fly tanpa menulis ke DB.
 |--------------------------------------------------------------------------
 */
 
 model AnalysisRun {
-  id_analysis_run Int @id @default(autoincrement())
-
-  // default, simulasi
-  tipe_run String @default("default") @db.VarChar(30)
-
-  id_simulasi Int?
-
-  nama_run   String? @db.VarChar(150)
-  status     String  @default("success") @db.VarChar(30)
-  keterangan String? @db.Text
-
-  versi     Int     @default(1)
-  is_active Boolean @default(true)
+  id_analysis_run Int     @id @default(autoincrement())
+  nama_run        String? @db.VarChar(150)
+  status          String  @default("success") @db.VarChar(30)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  simulasi      Simulasi?      @relation(fields: [id_simulasi], references: [id_simulasi], onDelete: SetNull)
   hasil_wlc     HasilWlc[]
   raster_layers RasterLayer[]
 
-  @@index([id_simulasi])
-  @@index([tipe_run])
-  @@index([is_active])
   @@map("analysis_run")
 }
 
@@ -401,6 +374,7 @@ model AnalysisRun {
 |--------------------------------------------------------------------------
 | GeoTIFF final_score tetap disimpan di RasterLayer.
 | Tabel ini dipakai untuk popup WebGIS, kategori, ranking, dan pencarian.
+| Selalu berisi hasil AnalysisRun yang paling terbaru saja.
 |--------------------------------------------------------------------------
 */
 
@@ -427,34 +401,20 @@ model HasilWlc {
 
 /*
 |--------------------------------------------------------------------------
-| 11. SIMULASI BOBOT
+| 11. EXISTING COFFEE SHOP
 |--------------------------------------------------------------------------
-| Bagian ini boleh dihapus jika aplikasi kamu tidak punya fitur simulasi bobot.
+| Berdiri sendiri, hanya untuk overlay lokasi kompetitor eksisting di peta.
 |--------------------------------------------------------------------------
 */
 
-model Simulasi {
-  id_simulasi   Int      @id @default(autoincrement())
-  nama_simulasi String?  @db.VarChar(100)
-  deskripsi     String?  @db.Text
-  created_at    DateTime @default(now())
+model ExistingCoffeeShop {
+  id_shop    Int      @id @default(autoincrement())
+  nama       String?  @db.VarChar(150)
+  latitude   Float
+  longitude  Float
+  geom       Unsupported("geometry(Point,32749)")
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-  simulasi_bobot_indikator SimulasiBobotIndikator[]
-  analysis_runs            AnalysisRun[]
-
-  @@map("simulasi")
-}
-
-model SimulasiBobotIndikator {
-  id_simulasi_bobot Int     @id @default(autoincrement())
-  id_simulasi       Int
-  id_indikator      Int
-  bobot_simulasi    Decimal @db.Decimal(10, 6)
-
-  simulasi  Simulasi  @relation(fields: [id_simulasi], references: [id_simulasi], onDelete: Cascade)
-  indikator Indikator @relation(fields: [id_indikator], references: [id_indikator], onDelete: Cascade)
-
-  @@unique([id_simulasi, id_indikator])
-  @@index([id_indikator])
-  @@map("simulasi_bobot_indikator")
+  @@map("existing_coffee_shop")
 }
