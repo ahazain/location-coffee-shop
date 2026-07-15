@@ -32,114 +32,105 @@ export const respondentPrioritySnapshots = [
   {
     respondentId: "R1",
     criteriaWeights: {
-      aglomerasi_aktivitas: 18,
-      hunian_pekerja: 17,
-      aksesibilitas: 27,
-      pusat_aktivitas: 18,
-      vitalitas_ekonomi_populasi: 15,
-      persaingan: 5,
+      "1": 14,
+      "2": 57,
+      "3": 9,
+      "4": 14,
+      "5": 5,
     },
     localIndicatorWeights: {
-      aglomerasi_aktivitas: {
-        kepadatan_makan: 58,
-        kepadatan_olahraga: 42,
+      "1": {
+        kepadatan_makan: 54,
+        kepadatan_olahraga: 30,
+        hunian_komersial: 16,
       },
-      hunian_pekerja: {
-        hunian_komersial: 48,
-        kepadatan_kantor: 52,
+      "2": {
+        jarak_pusat_komersial: 14,
+        kepadatan_pendidikan: 78,
+        kepadatan_kantor: 8,
       },
-      aksesibilitas: {
-        jarak_jalan: 45,
-        jarak_transportasi: 32,
-        kepadatan_simpang: 23,
+      "3": {
+        cahaya_malam: 67,
+        kepadatan_populasi: 33,
       },
-      pusat_aktivitas: {
-        jarak_pusat_komersial: 54,
-        kepadatan_pendidikan: 46,
+      "4": {
+        jarak_jalan: 54,
+        jarak_transportasi: 30,
+        kepadatan_simpang: 16,
       },
-      vitalitas_ekonomi_populasi: {
-        cahaya_malam: 46,
-        kepadatan_populasi: 54,
-      },
-      persaingan: {
-        kepadatan_pesaing: 52,
-        jarak_pesaing: 48,
+      "5": {
+        kepadatan_pesaing: 33,
+        jarak_pesaing: 67,
       },
     },
   },
   {
     respondentId: "R2",
     criteriaWeights: {
-      aglomerasi_aktivitas: 20,
-      hunian_pekerja: 16,
-      aksesibilitas: 24,
-      pusat_aktivitas: 19,
-      vitalitas_ekonomi_populasi: 14,
-      persaingan: 7,
+      "1": 16,
+      "2": 53,
+      "3": 10,
+      "4": 16,
+      "5": 6,
     },
     localIndicatorWeights: {
-      aglomerasi_aktivitas: {
+      "1": {
         kepadatan_makan: 62,
-        kepadatan_olahraga: 38,
+        kepadatan_olahraga: 24,
+        hunian_komersial: 14,
       },
-      hunian_pekerja: {
-        hunian_komersial: 50,
-        kepadatan_kantor: 50,
+      "2": {
+        jarak_pusat_komersial: 20,
+        kepadatan_pendidikan: 71,
+        kepadatan_kantor: 9,
       },
-      aksesibilitas: {
-        jarak_jalan: 42,
-        jarak_transportasi: 35,
-        kepadatan_simpang: 23,
+      "3": {
+        cahaya_malam: 75,
+        kepadatan_populasi: 25,
       },
-      pusat_aktivitas: {
-        jarak_pusat_komersial: 50,
-        kepadatan_pendidikan: 50,
+      "4": {
+        jarak_jalan: 62,
+        jarak_transportasi: 24,
+        kepadatan_simpang: 14,
       },
-      vitalitas_ekonomi_populasi: {
-        cahaya_malam: 48,
-        kepadatan_populasi: 52,
-      },
-      persaingan: {
-        kepadatan_pesaing: 50,
-        jarak_pesaing: 50,
+      "5": {
+        kepadatan_pesaing: 25,
+        jarak_pesaing: 75,
       },
     },
   },
   {
     respondentId: "R3",
     criteriaWeights: {
-      aglomerasi_aktivitas: 17,
-      hunian_pekerja: 18,
-      aksesibilitas: 26,
-      pusat_aktivitas: 18,
-      vitalitas_ekonomi_populasi: 16,
-      persaingan: 5,
+      "1": 13,
+      "2": 61,
+      "3": 8,
+      "4": 13,
+      "5": 5,
     },
     localIndicatorWeights: {
-      aglomerasi_aktivitas: {
-        kepadatan_makan: 60,
-        kepadatan_olahraga: 40,
+      "1": {
+        kepadatan_makan: 46,
+        kepadatan_olahraga: 32,
+        hunian_komersial: 22,
       },
-      hunian_pekerja: {
-        hunian_komersial: 46,
-        kepadatan_kantor: 54,
+      "2": {
+        jarak_pusat_komersial: 11,
+        kepadatan_pendidikan: 81,
+        kepadatan_kantor: 8,
       },
-      aksesibilitas: {
-        jarak_jalan: 44,
-        jarak_transportasi: 34,
+      "3": {
+        cahaya_malam: 60,
+        kepadatan_populasi: 40,
+      },
+      "4": {
+        jarak_jalan: 46,
+        jarak_transportasi: 32,
         kepadatan_simpang: 22,
       },
-      pusat_aktivitas: {
-        jarak_pusat_komersial: 52,
-        kepadatan_pendidikan: 48,
-      },
-      vitalitas_ekonomi_populasi: {
-        cahaya_malam: 44,
-        kepadatan_populasi: 56,
-      },
-      persaingan: {
-        kepadatan_pesaing: 48,
-        jarak_pesaing: 52,
+      "5": {
+        kepadatan_pesaing: 40,
+        jarak_pesaing: 60,
       },
     },
   },

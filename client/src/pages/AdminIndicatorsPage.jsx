@@ -25,11 +25,9 @@ export default function AdminIndicatorsPage() {
     id_indikator: null,
     id_kriteria: "",
     nama_indikator: "",
-    keterangan: "",
+    deskripsi: "",
     satuan: "",
-    arah_preferensi: "benefit",
-    fungsi_fuzzy: "linear_increasing",
-    urutan: 1,
+    tipe_nilai: "KEPADATAN",
   });
 
   const fetchData = async () => {
@@ -62,18 +60,16 @@ export default function AdminIndicatorsPage() {
 
     if (mode === "edit" && indikator) {
       setCurrentIndikator({
-        id_indikator: indikator.id_indikator,
+        id_indikator: indikator.id || indikator.id_indikator,
         id_kriteria:
           indikator.id_kriteria ||
           indikator.kriteria?.id_kriteria ||
           indikator.kriteria?.id ||
           "",
         nama_indikator: indikator.nama_indikator || "",
-        keterangan: indikator.keterangan || "",
+        deskripsi: indikator.deskripsi || "",
         satuan: indikator.satuan || "",
-        arah_preferensi: indikator.arah_preferensi || "benefit",
-        fungsi_fuzzy: indikator.fungsi_fuzzy || "linear_increasing",
-        urutan: indikator.urutan || 1,
+        tipe_nilai: indikator.tipe_nilai || "KEPADATAN",
       });
     } else {
       setCurrentIndikator({
@@ -81,11 +77,9 @@ export default function AdminIndicatorsPage() {
         id_kriteria:
           kriteriaList.length > 0 ? kriteriaList[0].id_kriteria : "",
         nama_indikator: "",
-        keterangan: "",
+        deskripsi: "",
         satuan: "",
-        arah_preferensi: "benefit",
-        fungsi_fuzzy: "linear_increasing",
-        urutan: indicators.length + 1,
+        tipe_nilai: "KEPADATAN",
       });
     }
 
@@ -103,7 +97,6 @@ export default function AdminIndicatorsPage() {
       const payload = {
         ...currentIndikator,
         id_kriteria: Number(currentIndikator.id_kriteria),
-        urutan: Number(currentIndikator.urutan),
       };
 
       if (modalMode === "add") {
@@ -113,7 +106,10 @@ export default function AdminIndicatorsPage() {
           message: "Indikator berhasil ditambahkan.",
         });
       } else {
-        await indikatorService.update(currentIndikator.id_indikator, payload);
+        await indikatorService.update(
+          currentIndikator.id_indikator,
+          payload
+        );
         setToast({
           type: "success",
           message: "Indikator berhasil diperbarui.",
@@ -265,54 +261,6 @@ export default function AdminIndicatorsPage() {
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-stone-700">
-                  Arah Preferensi
-                </label>
-                <select
-                  required
-                  value={currentIndikator.arah_preferensi}
-                  onChange={(e) =>
-                    setCurrentIndikator({
-                      ...currentIndikator,
-                      arah_preferensi: e.target.value,
-                    })
-                  }
-                  className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm outline-none focus:border-[#1D3557] focus:ring-4 focus:ring-blue-50/50"
-                >
-                  <option value="benefit">
-                    Benefit - Semakin besar semakin baik
-                  </option>
-                  <option value="cost">
-                    Cost - Semakin kecil semakin baik
-                  </option>
-                  <option value="optimum">
-                    Optimum - Mendekati titik tertentu
-                  </option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-stone-700">
-                  Fungsi Fuzzy
-                </label>
-                <select
-                  required
-                  value={currentIndikator.fungsi_fuzzy}
-                  onChange={(e) =>
-                    setCurrentIndikator({
-                      ...currentIndikator,
-                      fungsi_fuzzy: e.target.value,
-                    })
-                  }
-                  className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm outline-none focus:border-[#1D3557] focus:ring-4 focus:ring-blue-50/50"
-                >
-                  <option value="linear_increasing">Linear Increasing</option>
-                  <option value="linear_decreasing">Linear Decreasing</option>
-                  <option value="near">Near</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-stone-700">
                   Satuan
                 </label>
                 <input
@@ -331,38 +279,41 @@ export default function AdminIndicatorsPage() {
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-stone-700">
-                  Urutan AHP
+                  Tipe Nilai
                 </label>
-                <input
-                  type="number"
+                <select
                   required
-                  value={currentIndikator.urutan}
+                  value={currentIndikator.tipe_nilai}
                   onChange={(e) =>
                     setCurrentIndikator({
                       ...currentIndikator,
-                      urutan: Number(e.target.value),
+                      tipe_nilai: e.target.value,
                     })
                   }
                   className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm outline-none focus:border-[#1D3557] focus:ring-4 focus:ring-blue-50/50"
-                  min="1"
-                />
+                >
+                  <option value="KEPADATAN">Kepadatan</option>
+                  <option value="JARAK">Jarak</option>
+                  <option value="INTENSITAS">Intensitas</option>
+                  <option value="MASK">Mask (Constraint)</option>
+                </select>
               </div>
 
               <div className="col-span-2">
                 <label className="mb-1 block text-sm font-medium text-stone-700">
-                  Keterangan
+                  Deskripsi
                 </label>
                 <textarea
-                  value={currentIndikator.keterangan || ""}
+                  value={currentIndikator.deskripsi || ""}
                   onChange={(e) =>
                     setCurrentIndikator({
                       ...currentIndikator,
-                      keterangan: e.target.value,
+                      deskripsi: e.target.value,
                     })
                   }
                   className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm outline-none focus:border-[#1D3557] focus:ring-4 focus:ring-blue-50/50"
                   rows="2"
-                  placeholder="Penjelasan opsional"
+                  placeholder="Penjelasan opsional mengenai indikator"
                 ></textarea>
               </div>
 

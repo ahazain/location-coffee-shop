@@ -3,8 +3,8 @@ import { suitabilityStyles } from "../../utils/mapStyle";
 
 const legendOrder = [
   "Sesuai",
-  "Kurang sesuai",
-  "Tidak sesuai",
+  "Cukup Sesuai",
+  "Kurang Sesuai",
 ];
 
 export default function Legend() {

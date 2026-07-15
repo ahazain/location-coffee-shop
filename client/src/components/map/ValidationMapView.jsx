@@ -71,7 +71,7 @@ export default function ValidationMapView({
           return {
             color: isSelected ? "#7c2d12" : "#ffffff",
             weight: isSelected ? 3 : 1,
-            fillColor: isConstrained ? "#a8a29e" : getSuitabilityColor(feature.properties.suitabilityClass),
+            fillColor: getSuitabilityColor(feature.properties.suitabilityClass),
             fillOpacity: isSelected ? 0.85 : 0.65,
           };
         }}
@@ -99,7 +99,7 @@ export default function ValidationMapView({
       />
 
       {/* Coffee Shop points layer overlaid on top */}
-      {coffeePointsGeojson?.features?.map((feature) => {
+      {/* {coffeePointsGeojson?.features?.map((feature) => {
         const [lon, lat] = feature.geometry.coordinates;
         return (
           <Marker 
@@ -110,13 +110,13 @@ export default function ValidationMapView({
             <Popup>
               <div className="font-sans text-xs">
                 <strong className="text-sm text-stone-950">☕ {feature.properties.name || "Kedai Kopi"}</strong><br/>
-                <span className="text-stone-500">OSM ID:</span> <span className="font-mono text-stone-600">${feature.properties.osmId || "-"}</span><br/>
-                <span className="text-stone-500">Koordinat:</span> <span className="font-mono text-stone-600">${lat.toFixed(5)}, ${lon.toFixed(5)}</span>
+                <span className="text-stone-500">OSM ID:</span> <span className="font-mono text-stone-600">{feature.properties.osmId || "-"}</span><br/>
+                <span className="text-stone-500">Koordinat:</span> <span className="font-mono text-stone-600">{lat.toFixed(5)}, {lon.toFixed(5)}</span>
               </div>
             </Popup>
           </Marker>
         );
-      })}
+      })} */}
     </MapContainer>
   );
 }

@@ -1,6 +1,7 @@
 const express = require("express");
 const GeotiffController = require("../controllers/geotiff-controller");
 const uploadGeotiff = require("../middlewares/upload-geotiff");
+const authMiddleware = require("../middlewares/auth-middleware");
 
 const router = express.Router();
 
@@ -10,6 +11,7 @@ const router = express.Router();
 // ─────────────────────────────────────────────
 router.post(
   "/indikator/:id_indikator/raw",
+  authMiddleware,
   uploadGeotiff.single("file"),
   GeotiffController.uploadIndikatorRaw,
 );
@@ -17,6 +19,7 @@ router.post(
 // PUT /geotiff/indikator/:id_indikator/raw (Update & hapus data/storage lama)
 router.put(
   "/indikator/:id_indikator/raw",
+  authMiddleware,
   uploadGeotiff.single("file"),
   GeotiffController.updateIndikatorRaw,
 );
@@ -46,6 +49,7 @@ router.get(
 // ─────────────────────────────────────────────
 router.delete(
   "/raster/:id_raster_layer",
+  authMiddleware,
   GeotiffController.deleteRasterLayer,
 );
 

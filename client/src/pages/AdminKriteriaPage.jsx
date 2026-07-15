@@ -22,7 +22,6 @@ export default function AdminKriteriaPage() {
     id_kriteria: null,
     nama_kriteria: "",
     deskripsi: "",
-    urutan: 1,
   });
 
   const fetchKriteria = async () => {
@@ -52,14 +51,12 @@ export default function AdminKriteriaPage() {
         id_kriteria: kriteria.id_kriteria,
         nama_kriteria: kriteria.nama_kriteria || "",
         deskripsi: kriteria.deskripsi || "",
-        urutan: kriteria.urutan || 1,
       });
     } else {
       setCurrentKriteria({
         id_kriteria: null,
         nama_kriteria: "",
         deskripsi: "",
-        urutan: kriteriaList.length + 1,
       });
     }
 
@@ -174,7 +171,7 @@ export default function AdminKriteriaPage() {
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead className="bg-[#f8fafc]/50 border-b border-stone-100 text-[10px] font-bold uppercase tracking-wider text-stone-400">
                 <tr>
-                  <th className="px-6 py-4">Urutan</th>
+                  <th className="px-6 py-4">No</th>
                   <th className="px-6 py-4">Nama Kriteria</th>
                   <th className="px-6 py-4">Deskripsi</th>
                   <th className="px-6 py-4 text-right">Aksi</th>
@@ -201,13 +198,13 @@ export default function AdminKriteriaPage() {
                     </td>
                   </tr>
                 ) : (
-                  kriteriaList.map((item) => (
+                  kriteriaList.map((item, index) => (
                     <tr
                       key={item.id_kriteria}
                       className="hover:bg-stone-50/40 transition"
                     >
                       <td className="px-6 py-4 font-semibold text-stone-400 font-mono">
-                        {String(item.urutan).padStart(2, "0")}
+                        {String(index + 1).padStart(2, "0")}
                       </td>
 
                       <td className="px-6 py-4">
@@ -301,24 +298,7 @@ export default function AdminKriteriaPage() {
                 ></textarea>
               </div>
 
-              <div>
-                <label className="mb-1 block text-sm font-medium text-stone-700">
-                  Urutan AHP
-                </label>
-                <input
-                  type="number"
-                  required
-                  value={currentKriteria.urutan}
-                  onChange={(e) =>
-                    setCurrentKriteria({
-                      ...currentKriteria,
-                      urutan: Number(e.target.value),
-                    })
-                  }
-                  className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm outline-none focus:border-[#1D3557] focus:ring-4 focus:ring-blue-50/50"
-                  min="1"
-                />
-              </div>
+
 
               <div className="mt-6 flex justify-end gap-3">
                 <button

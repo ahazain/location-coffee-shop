@@ -9,3 +9,4 @@ export { ahpService } from "./ahpService";
 export { fuzzyService } from "./fuzzyService";
 export { wlcService } from "./wlcService";
 export { geotiffService } from "./geotiffService";
+export { authService } from "./authService";

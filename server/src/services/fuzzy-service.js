@@ -1,6 +1,12 @@
 const path = require("path");
 const fs = require("fs");
 const prisma = require("../prisma/prisma-client");
+const {
+  TipeRaster,
+  TipeNilaiIndikator,
+  FungsiFuzzy,
+  ArahFuzzy,
+} = require("@prisma/client");
 const FuzzyHelper = require("../helpers/fuzzy-helper");
 const GeotiffHelper = require("../helpers/geotiff-helper");
 const RasterDbUtil = require("../utils/raster-db-util");
@@ -33,7 +39,7 @@ class FuzzyService {
       throw new NotFoundError("Indikator tidak ditemukan.");
     }
 
-    if (indikator.tipe_nilai === "mask") {
+    if (indikator.tipe_nilai === TipeNilaiIndikator.MASK) {
       throw new BadRequestError(
         "Indikator constraint/mask tidak dihitung sebagai nilai fuzzy.",
       );
@@ -42,6 +48,13 @@ class FuzzyService {
     return indikator;
   }
 
+  /**
+   * Format record aturan_fuzzy dari DB untuk response API.
+   * PERBAIKAN: sebelumnya field fungsi_fuzzy & arah salah dikirim sebagai
+   * referensi ke object enum Prisma itu sendiri (`FungsiFuzzy`, `ArahFuzzy`),
+   * bukan nilai dari `rule`. Sekarang dikembalikan sebagai string enum asli
+   * (mis. "LINEAR", "INCREASING") supaya konsumen tahu persis nilai di DB.
+   */
   static formatAturan(rule) {
     return {
       id_aturan: rule.id_aturan,
@@ -69,34 +82,49 @@ class FuzzyService {
     };
   }
 
+  /**
+   * Validasi payload aturan fuzzy dari request.
+   * Sesuai schema baru: fungsi_fuzzy ("linear" | "near"), arah wajib diisi
+   * eksplisit untuk "linear" (tidak lagi ditebak dari nama fungsi seperti
+   * versi lama yang punya linear_increasing/linear_decreasing/bell_shaped).
+   *
+   * Return: { fungsi_fuzzy, arah } dalam bentuk ENUM PRISMA (UPPERCASE),
+   * siap langsung dipakai untuk create/update Prisma.
+   */
   static validateRulePayload(payload) {
-    const fungsi_fuzzy = FuzzyHelper.normalizeFunctionName(
+    const fungsiFuzzyNormalized = FuzzyHelper.normalizeFunctionName(
       payload.fungsi_fuzzy,
     );
-    const arah = FuzzyHelper.getArahByFunction(fungsi_fuzzy);
+    const arahNormalized = FuzzyHelper.normalizeArah(
+      payload.arah,
+      fungsiFuzzyNormalized,
+    );
 
-    if (fungsi_fuzzy === "near") {
+    if (fungsiFuzzyNormalized === "near") {
       FuzzyHelper.toNumber(payload.midpoint, "midpoint");
-      FuzzyHelper.toNumber(payload.spread, "spread");
     }
 
     return {
-      fungsi_fuzzy,
-      arah,
+      fungsi_fuzzy: FuzzyHelper.toPrismaFungsiFuzzy(fungsiFuzzyNormalized),
+      arah: FuzzyHelper.toPrismaArah(arahNormalized, fungsiFuzzyNormalized),
     };
   }
 
   /**
-   * Ambil aturan fuzzy aktif untuk satu indikator.
-   * Sumber min/max diambil dari raster_layers (raw, active) —
-   * tidak lagi dari statistik_indikator.
+   * Ambil aturan fuzzy aktif untuk satu indikator, resolve min/max dari
+   * raster_layers (raw, active) jika nilai_min/nilai_max belum diisi manual.
+   *
+   * PERBAIKAN: baris debug lama `if (fungsiFuzzy === TipeRaster... // salah...`
+   * adalah syntax error yang menyebabkan crash nodemon — sudah dihapus.
+   * Perbandingan sekarang konsisten pakai enum FungsiFuzzy dari @prisma/client.
    */
   static resolveRuleFromRaster(rule, rawRaster) {
-    const fungsiFuzzy = FuzzyHelper.normalizeFunctionName(rule.fungsi_fuzzy);
+    const fungsiFuzzy = rule.fungsi_fuzzy; // "LINEAR" | "NEAR" (enum)
+    const arah = rule.arah; // "INCREASING" | "DECREASING" | "NEAR" (enum)
 
     const resolvedRule = {
       fungsi_fuzzy: fungsiFuzzy,
-      arah: rule.arah,
+      arah: arah,
       midpoint:
         rule.midpoint !== null && rule.midpoint !== undefined
           ? Number(rule.midpoint)
@@ -107,37 +135,42 @@ class FuzzyService {
           : null,
     };
 
-    // Untuk linear increasing / decreasing, min-max diambil dari database jika ada,
-    // jika null, ambil dari statistik raster raw sebagai fallback
-    if (
-      fungsiFuzzy === "linear_increasing" ||
-      fungsiFuzzy === "linear_decreasing"
-    ) {
-      const dbMin = rule.nilai_min !== null && rule.nilai_min !== undefined ? Number(rule.nilai_min) : null;
-      const dbMax = rule.nilai_max !== null && rule.nilai_max !== undefined ? Number(rule.nilai_max) : null;
+    if (fungsiFuzzy === FungsiFuzzy.LINEAR) {
+      // arah (INCREASING/DECREASING) menentukan arah linearnya
+      const dbMin =
+        rule.nilai_min !== null && rule.nilai_min !== undefined
+          ? Number(rule.nilai_min)
+          : null;
+      const dbMax =
+        rule.nilai_max !== null && rule.nilai_max !== undefined
+          ? Number(rule.nilai_max)
+          : null;
 
-      if (dbMin !== null) {
-        resolvedRule.nilai_min = dbMin;
-      } else {
-        if (rawRaster.min_value === null) {
-          throw new BadRequestError(
-            "Raster raw belum memiliki statistik min. Re-upload GeoTIFF raw.",
-          );
-        }
-        resolvedRule.nilai_min = Number(rawRaster.min_value);
-      }
+      resolvedRule.nilai_min =
+        dbMin !== null
+          ? dbMin
+          : rawRaster.min_value !== null
+            ? Number(rawRaster.min_value)
+            : (() => {
+                throw new BadRequestError(
+                  "Raster raw belum memiliki statistik min. Re-upload GeoTIFF raw.",
+                );
+              })();
 
-      if (dbMax !== null) {
-        resolvedRule.nilai_max = dbMax;
-      } else {
-        if (rawRaster.max_value === null) {
-          throw new BadRequestError(
-            "Raster raw belum memiliki statistik max. Re-upload GeoTIFF raw.",
-          );
-        }
-        resolvedRule.nilai_max = Number(rawRaster.max_value);
-      }
+      resolvedRule.nilai_max =
+        dbMax !== null
+          ? dbMax
+          : rawRaster.max_value !== null
+            ? Number(rawRaster.max_value)
+            : (() => {
+                throw new BadRequestError(
+                  "Raster raw belum memiliki statistik max. Re-upload GeoTIFF raw.",
+                );
+              })();
     }
+
+    // NEAR: cukup midpoint (+ nilai_min/nilai_max opsional untuk piecewise di helper).
+    // spread tidak dipakai perhitungan NEAR versi baru, dipertahankan untuk kompatibilitas data lama.
 
     return resolvedRule;
   }
@@ -156,6 +189,44 @@ class FuzzyService {
     const relPath = path.join(relDir, fileName).replace(/\\/g, "/");
 
     return { absPath, relPath };
+  }
+
+  /**
+   * Hitung nilai midpoint otomatis (median) untuk fungsi NEAR dari pixel
+   * raster raw, bila user tidak mengirim midpoint sendiri.
+   */
+  static async computeAutoMidpointFromRaster(rawRaster) {
+    try {
+      const rawAbsPath = path.isAbsolute(rawRaster.file_path)
+        ? rawRaster.file_path
+        : path.join(process.cwd(), rawRaster.file_path);
+
+      const { noDataValue, pixelValues } =
+        await GeotiffHelper.readPixelsForFuzzy(rawAbsPath);
+
+      const validValues = pixelValues.filter(
+        (v) =>
+          v !== null &&
+          v !== undefined &&
+          !Number.isNaN(v) &&
+          Number.isFinite(v) &&
+          (noDataValue === null || v !== noDataValue),
+      );
+
+      if (validValues.length === 0) {
+        return 0;
+      }
+
+      validValues.sort((a, b) => a - b);
+      const mid = Math.floor(validValues.length / 2);
+
+      return validValues.length % 2 !== 0
+        ? validValues[mid]
+        : (validValues[mid - 1] + validValues[mid]) / 2;
+    } catch (err) {
+      console.error("Gagal menghitung median otomatis:", err.message);
+      return 0;
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -192,73 +263,76 @@ class FuzzyService {
   }
 
   static async saveAturan(payload) {
-    const { id_indikator, fungsi_fuzzy, midpoint, spread, nilai_min, nilai_max } =
-      payload;
+    const {
+      id_indikator,
+      fungsi_fuzzy,
+      arah,
+      midpoint,
+      spread,
+      nilai_min,
+      nilai_max,
+    } = payload;
 
     const indikator = await this.getIndikatorOrThrow(id_indikator);
 
-    const scarcityCheck = midpoint !== undefined && midpoint !== null && midpoint !== "";
+    const midpointProvided =
+      midpoint !== undefined && midpoint !== null && midpoint !== "";
+
     const validated = this.validateRulePayload({
       fungsi_fuzzy,
-      midpoint: scarcityCheck ? midpoint : 0,
-      spread: spread ?? 0.1,
+      arah,
+      midpoint: midpointProvided ? midpoint : 0,
     });
 
-    const isNear = validated.fungsi_fuzzy === "near";
-    const statusSpread = spread !== undefined && spread !== null && spread !== "" ? Number(spread) : 0.1;
+    const isNear = validated.fungsi_fuzzy === FungsiFuzzy.NEAR;
+
+    const statusSpread =
+      spread !== undefined && spread !== null && spread !== ""
+        ? Number(spread)
+        : null;
 
     // Ambil raster raw aktif untuk auto-fill min/max/median
     const rawRaster = await prisma.rasterLayer.findFirst({
       where: {
         id_indikator: indikator.id_indikator,
-        tipe_raster: "raw",
+        tipe_raster: TipeRaster.RAW,
       },
     });
 
-    let autoMin = !isNear && nilai_min !== undefined && nilai_min !== null && nilai_min !== "" ? Number(nilai_min) : null;
-    let autoMax = !isNear && nilai_max !== undefined && nilai_max !== null && nilai_max !== "" ? Number(nilai_max) : null;
-    let autoMidpoint = isNear ? (scarcityCheck ? Number(midpoint) : null) : null;
+    let autoMin =
+      !isNear &&
+      nilai_min !== undefined &&
+      nilai_min !== null &&
+      nilai_min !== ""
+        ? Number(nilai_min)
+        : null;
+    let autoMax =
+      !isNear &&
+      nilai_max !== undefined &&
+      nilai_max !== null &&
+      nilai_max !== ""
+        ? Number(nilai_max)
+        : null;
+    let autoMidpoint = isNear
+      ? midpointProvided
+        ? Number(midpoint)
+        : null
+      : null;
 
     if (rawRaster) {
       if (!isNear) {
         if (autoMin === null) {
-          autoMin = rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
+          autoMin =
+            rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
         }
         if (autoMax === null) {
-          autoMax = rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
+          autoMax =
+            rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
         }
       }
 
       if (isNear && autoMidpoint === null) {
-        try {
-          const rawAbsPath = path.isAbsolute(rawRaster.file_path)
-            ? rawRaster.file_path
-            : path.join(process.cwd(), rawRaster.file_path);
-
-          const GeotiffHelper = require("../helpers/geotiff-helper");
-          const { noDataValue, pixelValues } = await GeotiffHelper.readPixelsForFuzzy(rawAbsPath);
-
-          const validValues = pixelValues.filter(v =>
-            v !== null &&
-            v !== undefined &&
-            !Number.isNaN(v) &&
-            Number.isFinite(v) &&
-            (noDataValue === null || v !== noDataValue)
-          );
-
-          if (validValues.length > 0) {
-            validValues.sort((a, b) => a - b);
-            const mid = Math.floor(validValues.length / 2);
-            autoMidpoint = validValues.length % 2 !== 0
-              ? validValues[mid]
-              : (validValues[mid - 1] + validValues[mid]) / 2;
-          } else {
-            autoMidpoint = 0;
-          }
-        } catch (err) {
-          console.error("Gagal menghitung median otomatis:", err.message);
-          autoMidpoint = 0;
-        }
+        autoMidpoint = await this.computeAutoMidpointFromRaster(rawRaster);
       }
     }
 
@@ -303,84 +377,87 @@ class FuzzyService {
       throw new NotFoundError("Aturan fuzzy untuk indikator ini belum ada.");
     }
 
+    // existing.fungsi_fuzzy / existing.arah sudah berupa enum Prisma (UPPERCASE),
+    // FuzzyHelper.normalizeFunctionName/normalizeArah menerima keduanya
+    // (case-insensitive) jadi aman dipakai langsung sebagai default.
     const mergedPayload = {
       fungsi_fuzzy: payload.fungsi_fuzzy ?? existing.fungsi_fuzzy,
+      arah: payload.arah ?? existing.arah,
       midpoint:
         payload.midpoint !== undefined ? payload.midpoint : existing.midpoint,
       spread: payload.spread !== undefined ? payload.spread : existing.spread,
       nilai_min:
-        payload.nilai_min !== undefined ? payload.nilai_min : existing.nilai_min,
+        payload.nilai_min !== undefined
+          ? payload.nilai_min
+          : existing.nilai_min,
       nilai_max:
-        payload.nilai_max !== undefined ? payload.nilai_max : existing.nilai_max,
+        payload.nilai_max !== undefined
+          ? payload.nilai_max
+          : existing.nilai_max,
     };
 
-    const isNear = mergedPayload.fungsi_fuzzy === "near";
-    const scarcityCheck = mergedPayload.midpoint !== undefined && mergedPayload.midpoint !== null && mergedPayload.midpoint !== "";
+    const midpointProvided =
+      mergedPayload.midpoint !== undefined &&
+      mergedPayload.midpoint !== null &&
+      mergedPayload.midpoint !== "";
 
     const validated = this.validateRulePayload({
       fungsi_fuzzy: mergedPayload.fungsi_fuzzy,
-      midpoint: scarcityCheck ? mergedPayload.midpoint : 0,
-      spread: mergedPayload.spread ?? 0.1,
+      arah: mergedPayload.arah,
+      midpoint: midpointProvided ? mergedPayload.midpoint : 0,
     });
 
-    const statusSpread = mergedPayload.spread !== undefined && mergedPayload.spread !== null && mergedPayload.spread !== "" ? Number(mergedPayload.spread) : 0.1;
+    const isNear = validated.fungsi_fuzzy === FungsiFuzzy.NEAR;
+
+    const statusSpread =
+      mergedPayload.spread !== undefined &&
+      mergedPayload.spread !== null &&
+      mergedPayload.spread !== ""
+        ? Number(mergedPayload.spread)
+        : null;
 
     // Ambil raster raw aktif untuk update min/max/median
     const rawRaster = await prisma.rasterLayer.findFirst({
       where: {
         id_indikator: parsedId,
-        tipe_raster: "raw",
+        tipe_raster: TipeRaster.RAW,
       },
     });
 
-    let autoMin = !isNear && mergedPayload.nilai_min !== null && mergedPayload.nilai_min !== undefined && mergedPayload.nilai_min !== ""
-      ? Number(mergedPayload.nilai_min)
+    let autoMin =
+      !isNear &&
+      mergedPayload.nilai_min !== null &&
+      mergedPayload.nilai_min !== undefined &&
+      mergedPayload.nilai_min !== ""
+        ? Number(mergedPayload.nilai_min)
+        : null;
+    let autoMax =
+      !isNear &&
+      mergedPayload.nilai_max !== null &&
+      mergedPayload.nilai_max !== undefined &&
+      mergedPayload.nilai_max !== ""
+        ? Number(mergedPayload.nilai_max)
+        : null;
+    let autoMidpoint = isNear
+      ? midpointProvided
+        ? Number(mergedPayload.midpoint)
+        : null
       : null;
-    let autoMax = !isNear && mergedPayload.nilai_max !== null && mergedPayload.nilai_max !== undefined && mergedPayload.nilai_max !== ""
-      ? Number(mergedPayload.nilai_max)
-      : null;
-    let autoMidpoint = isNear ? (scarcityCheck ? Number(mergedPayload.midpoint) : null) : null;
 
     if (rawRaster) {
       if (!isNear) {
         if (autoMin === null) {
-          autoMin = rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
+          autoMin =
+            rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
         }
         if (autoMax === null) {
-          autoMax = rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
+          autoMax =
+            rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
         }
       }
 
       if (isNear && autoMidpoint === null) {
-        try {
-          const rawAbsPath = path.isAbsolute(rawRaster.file_path)
-            ? rawRaster.file_path
-            : path.join(process.cwd(), rawRaster.file_path);
-
-          const GeotiffHelper = require("../helpers/geotiff-helper");
-          const { noDataValue, pixelValues } = await GeotiffHelper.readPixelsForFuzzy(rawAbsPath);
-
-          const validValues = pixelValues.filter(v =>
-            v !== null &&
-            v !== undefined &&
-            !Number.isNaN(v) &&
-            Number.isFinite(v) &&
-            (noDataValue === null || v !== noDataValue)
-          );
-
-          if (validValues.length > 0) {
-            validValues.sort((a, b) => a - b);
-            const mid = Math.floor(validValues.length / 2);
-            autoMidpoint = validValues.length % 2 !== 0
-              ? validValues[mid]
-              : (validValues[mid - 1] + validValues[mid]) / 2;
-          } else {
-            autoMidpoint = 0;
-          }
-        } catch (err) {
-          console.error("Gagal menghitung median otomatis:", err.message);
-          autoMidpoint = 0;
-        }
+        autoMidpoint = await this.computeAutoMidpointFromRaster(rawRaster);
       }
     }
 
@@ -460,7 +537,7 @@ class FuzzyService {
     const rawRaster = await prisma.rasterLayer.findFirst({
       where: {
         id_indikator: parsedId,
-        tipe_raster: "raw",
+        tipe_raster: TipeRaster.RAW,
       },
     });
 
@@ -482,8 +559,7 @@ class FuzzyService {
       await GeotiffHelper.readPixelsForFuzzy(rawAbsPath);
 
     // 6. Hitung fuzzy per pixel
-    const fuzzyOutputNodata =
-      noDataValue !== null ? noDataValue : -9999;
+    const fuzzyOutputNodata = noDataValue !== null ? noDataValue : -9999;
 
     const fuzzyValues = new Array(pixelValues.length);
 
@@ -527,17 +603,20 @@ class FuzzyService {
 
     try {
       savedRaster = await prisma.$transaction(async (tx) => {
-        // Hapus record fuzzy lama dari DB dan simpan path-nya
+        // Hapus record fuzzy lama dari DB dan simpan path-nya.
+        // PERBAIKAN: kirim enum Prisma (TipeRaster.FUZZY), bukan string "fuzzy" —
+        // ini penyebab error "Invalid value for argument tipe_raster. Expected TipeRaster."
         oldFuzzyFilePath = await RasterDbUtil.deleteExistingRaster(tx, {
           id_indikator: parsedId,
-          tipe_raster: "fuzzy",
+          tipe_raster: TipeRaster.FUZZY,
         });
 
         // Simpan raster fuzzy baru
         return tx.rasterLayer.create({
           data: {
             id_indikator: parsedId,
-            tipe_raster: "fuzzy",
+            kode_layer: this.buildFuzzyKodeLayer(parsedId),
+            tipe_raster: TipeRaster.FUZZY,
             file_path: fuzzyRelPath,
             crs: fuzzyMetadata.crs,
             min_value: fuzzyMetadata.min_value,
@@ -550,7 +629,9 @@ class FuzzyService {
     } catch (dbErr) {
       // Rollback file baru jika DB gagal
       if (fs.existsSync(fuzzyAbsPath)) {
-        try { fs.unlinkSync(fuzzyAbsPath); } catch (_) {}
+        try {
+          fs.unlinkSync(fuzzyAbsPath);
+        } catch (_) {}
       }
       throw dbErr;
     }
@@ -565,7 +646,9 @@ class FuzzyService {
         try {
           fs.unlinkSync(absoluteOldPath);
         } catch (err) {
-          console.warn(`  [WARNING] Gagal menghapus file fuzzy lama ${oldFuzzyFilePath}: ${err.message}`);
+          console.warn(
+            `  [WARNING] Gagal menghapus file fuzzy lama ${oldFuzzyFilePath}: ${err.message}`,
+          );
         }
       }
     }
@@ -583,7 +666,15 @@ class FuzzyService {
       total_pixel: pixelValues.length,
     };
   }
-
+  /**
+   * Generate kode_layer unik untuk raster fuzzy.
+   * Format: FUZZY-{id_indikator}-{timestamp}
+   * (kode_layer bersifat @unique di schema, jadi harus selalu berbeda tiap kali dibuat)
+   */
+  static buildFuzzyKodeLayer(id_indikator) {
+    const timestamp = Date.now();
+    return `FUZZY-${id_indikator}-${timestamp}`;
+  }
   /**
    * Hitung fuzzy untuk semua indikator yang memiliki:
    * - aturan_fuzzy terdefinisi

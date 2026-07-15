@@ -29,6 +29,15 @@ class WlcController {
     }
   }
 
+  static async getSementaraFuzzy(req, res) {
+    try {
+      const data = await WlcService.getSementaraFuzzy();
+      ResponseHelper.success(res, data, "(Sementara) Data fuzzy per grid berhasil diambil.");
+    } catch (error) {
+      ResponseHelper.error(res, error);
+    }
+  }
+
   static async getBoundary(req, res) {
     try {
       const data = await WlcService.getBoundaryGeoJson();

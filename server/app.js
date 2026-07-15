@@ -10,6 +10,7 @@ const fuzzyRoute = require("./src/routes/fuzzy-route");
 const geotiffRoute = require("./src/routes/geotiff-route");
 const wlcRoute = require("./src/routes/wlc-route");
 const validationRoute = require("./src/routes/validation-route");
+const authRoute = require("./src/routes/auth-route");
 const app = express();
 const port = envConfig.port;
 
@@ -20,6 +21,8 @@ app.use(express.urlencoded({ extended: true }));
 app.get("/", (req, res) => {
   res.send("the system works !!!");
 });
+
+app.use("/auth", authRoute);
 
 app.use("/ahp/pakar", pakarRoute);
 app.use("/ahp", ahpRoute);

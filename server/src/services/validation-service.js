@@ -40,16 +40,27 @@ class ValidationService {
    * beserta beberapa sampel grid untuk evaluasi kesesuaian dan pembatas.
    */
   static async getSpatialValidationStats() {
-    // 1. Ambil analysis run WLC yang aktif (yang paling terbaru)
-    const activeRun = await prisma.analysisRun.findFirst({
-      orderBy: { id_analysis_run: "desc" }
+    // 1. Ambil raster layer WLC final_score yang aktif (sebagai penanda run teraktif)
+    const activeLayer = await prisma.rasterLayer.findFirst({
+      where: { tipe_raster: "FINAL_SCORE" },
+      orderBy: { id_raster_layer: "desc" }
     });
 
-    if (!activeRun) {
+    if (!activeLayer) {
       throw new NotFoundError("Hasil kalkulasi WLC aktif belum ditemukan. Silakan jalankan kalkulasi WLC terlebih dahulu.");
     }
 
-    const runId = activeRun.id_analysis_run;
+    const runId = activeLayer.id_raster_layer;
+
+    // Helper untuk memetakan nama kelas kesesuaian dari DB (lowercase/snake_case) ke format UI (Title Case)
+    const mapDbClassToUi = (dbClass) => {
+      if (!dbClass) return "";
+      const normalized = dbClass.toLowerCase();
+      if (normalized === "sesuai") return "Sesuai";
+      if (normalized === "cukup_sesuai") return "Cukup Sesuai";
+      if (normalized === "kurang_sesuai") return "Kurang Sesuai";
+      return dbClass;
+    };
 
     // 2. Hitung total coffee shop eksisting di database
     const totalCoffeeShopsCount = await prisma.existingCoffeeShop.count();
@@ -66,15 +77,19 @@ class ValidationService {
       FROM grid g
       INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
       INNER JOIN existing_coffee_shop c ON ST_Contains(g.geom, c.geom)
-      WHERE h.id_analysis_run = $1
-        AND g.kecamatan IS NOT NULL  -- Hanya grid di dalam wilayah studi
+      WHERE g.kecamatan IS NOT NULL  -- Hanya grid di dalam wilayah studi
       GROUP BY h.kelas_kesesuaian
-    `, runId);
+    `);
 
     // Pastikan semua kategori terwakili meskipun jumlahnya 0
-    const classes = ["Sesuai", "Kurang Sesuai", "Tidak Sesuai"];
+    const classes = ["Sesuai", "Cukup Sesuai", "Kurang Sesuai"];
+    const distributionMapped = distributionRaw.map(d => ({
+      kelas_kesesuaian: mapDbClassToUi(d.kelas_kesesuaian),
+      jumlah: d.jumlah
+    }));
+
     const sebaran = classes.map(cls => {
-      const match = distributionRaw.find(d => d.kelas_kesesuaian === cls);
+      const match = distributionMapped.find(d => d.kelas_kesesuaian === cls);
       const jumlah = match ? match.jumlah : 0;
       const persentase = totalCoffeeShopsCount > 0 
         ? Number(((jumlah / totalCoffeeShopsCount) * 100).toFixed(2)) 
@@ -92,10 +107,9 @@ class ValidationService {
       FROM grid g
       INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
       INNER JOIN existing_coffee_shop c ON ST_Contains(g.geom, c.geom)
-      WHERE h.id_analysis_run = $1
-        AND g.kecamatan IS NOT NULL  -- Hanya grid di dalam wilayah studi
+      WHERE g.kecamatan IS NOT NULL  -- Hanya grid di dalam wilayah studi
         AND ((h.nilai_indikator->>'sawah')::numeric = 0 OR (h.nilai_indikator->>'sempadan_sungai')::numeric = 0)
-    `, runId);
+    `);
 
     const violations = constraintViolationsRaw[0] || { total_pelanggaran: 0, pelanggaran_sawah: 0, pelanggaran_sungai: 0 };
     const persentasePelanggaran = totalCoffeeShopsCount > 0 
@@ -104,10 +118,8 @@ class ValidationService {
 
     // 5. Ambil sampel grid representatif untuk audit kesesuaian dan pembatas
     //    HANYA grid yang berada di dalam wilayah studi (memiliki kecamatan terisi)
-    const limitSample = 3;
-
-    // Sampel grid Sesuai (non-constrained)
-    const sampelSesuai = await prisma.$queryRawUnsafe(`
+    // 1. Sampel grid Kepadatan Tinggi (kepadatan coffee shop eksisting tertinggi)
+    const sampelKepadatanTinggi = await prisma.$queryRawUnsafe(`
       SELECT
         g.kode_grid,
         g.kecamatan,
@@ -119,18 +131,54 @@ class ValidationService {
       FROM grid g
       INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
       LEFT JOIN existing_coffee_shop c ON ST_Contains(g.geom, c.geom)
-      WHERE h.id_analysis_run = $1
-        AND g.kecamatan IS NOT NULL  -- Hanya grid di dalam wilayah studi
-        AND h.kelas_kesesuaian = 'Sesuai'
+      WHERE g.kecamatan IS NOT NULL
+      GROUP BY g.id_grid, g.kode_grid, g.kecamatan, g.kelurahan, h.skor_wlc, h.kelas_kesesuaian, h.nilai_indikator
+      ORDER BY jumlah_coffee_shop DESC, h.skor_wlc DESC
+      LIMIT 1
+    `);
+
+    // 2. Sampel grid Tanpa Kopi Kuat (tanpa coffee shop eksisting tergolong kelas Sesuai)
+    const sampelTanpaKopiKuat = await prisma.$queryRawUnsafe(`
+      SELECT
+        g.kode_grid,
+        g.kecamatan,
+        g.kelurahan,
+        h.skor_wlc::float as skor_wlc,
+        h.kelas_kesesuaian,
+        h.nilai_indikator,
+        0 as jumlah_coffee_shop
+      FROM grid g
+      INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
+      WHERE g.kecamatan IS NOT NULL
+        AND h.kelas_kesesuaian = 'sesuai'
+        AND (h.nilai_indikator->>'kepadatan_coffee_shop_existing')::numeric = 0
+      ORDER BY h.skor_wlc DESC
+      LIMIT 1
+    `);
+
+    // 3. Sampel grid Tanpa Kopi Lemah (tanpa coffee shop eksisting tergolong kelas Kurang Sesuai)
+    const sampelTanpaKopiLemah = await prisma.$queryRawUnsafe(`
+      SELECT
+        g.kode_grid,
+        g.kecamatan,
+        g.kelurahan,
+        h.skor_wlc::float as skor_wlc,
+        h.kelas_kesesuaian,
+        h.nilai_indikator,
+        0 as jumlah_coffee_shop
+      FROM grid g
+      INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
+      WHERE g.kecamatan IS NOT NULL
+        AND h.kelas_kesesuaian = 'kurang_sesuai'
         AND (h.nilai_indikator->>'sawah')::numeric = 1
         AND (h.nilai_indikator->>'sempadan_sungai')::numeric = 1
-      GROUP BY g.id_grid, h.id_hasil
-      ORDER BY g.kode_grid ASC
-      LIMIT $2
-    `, runId, limitSample);
+        AND (h.nilai_indikator->>'kepadatan_coffee_shop_existing')::numeric = 0
+      ORDER BY h.skor_wlc DESC
+      LIMIT 1
+    `);
 
-    // Sampel grid Kurang Sesuai (non-constrained)
-    const sampelKurangSesuai = await prisma.$queryRawUnsafe(`
+    // 4. Sampel grid Pembatas Lahan (berada pada area constraint = 0)
+    const sampelPembatasLahan = await prisma.$queryRawUnsafe(`
       SELECT
         g.kode_grid,
         g.kecamatan,
@@ -138,69 +186,25 @@ class ValidationService {
         h.skor_wlc::float as skor_wlc,
         h.kelas_kesesuaian,
         h.nilai_indikator,
-        COUNT(c.id_shop)::int as jumlah_coffee_shop
+        (SELECT COUNT(*)::int FROM existing_coffee_shop c WHERE ST_Contains(g.geom, c.geom)) as jumlah_coffee_shop
       FROM grid g
       INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
-      LEFT JOIN existing_coffee_shop c ON ST_Contains(g.geom, c.geom)
-      WHERE h.id_analysis_run = $1
-        AND g.kecamatan IS NOT NULL  -- Hanya grid di dalam wilayah studi
-        AND h.kelas_kesesuaian = 'Kurang Sesuai'
-        AND (h.nilai_indikator->>'sawah')::numeric = 1
-        AND (h.nilai_indikator->>'sempadan_sungai')::numeric = 1
-      GROUP BY g.id_grid, h.id_hasil
-      ORDER BY g.kode_grid ASC
-      LIMIT $2
-    `, runId, limitSample);
-
-    // Sampel grid Tidak Sesuai (karena skor rendah, bukan constraint)
-    const sampelTidakSesuaiSkor = await prisma.$queryRawUnsafe(`
-      SELECT
-        g.kode_grid,
-        g.kecamatan,
-        g.kelurahan,
-        h.skor_wlc::float as skor_wlc,
-        h.kelas_kesesuaian,
-        h.nilai_indikator,
-        COUNT(c.id_shop)::int as jumlah_coffee_shop
-      FROM grid g
-      INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
-      LEFT JOIN existing_coffee_shop c ON ST_Contains(g.geom, c.geom)
-      WHERE h.id_analysis_run = $1
-        AND g.kecamatan IS NOT NULL  -- Hanya grid di dalam wilayah studi
-        AND h.kelas_kesesuaian = 'Tidak Sesuai'
-        AND (h.nilai_indikator->>'sawah')::numeric = 1
-        AND (h.nilai_indikator->>'sempadan_sungai')::numeric = 1
-      GROUP BY g.id_grid, h.id_hasil
-      ORDER BY g.kode_grid ASC
-      LIMIT $2
-    `, runId, limitSample);
-
-    // Sampel grid yang terkena Pembatas Lahan (Constraint)
-    const sampelPembatas = await prisma.$queryRawUnsafe(`
-      SELECT
-        g.kode_grid,
-        g.kecamatan,
-        g.kelurahan,
-        h.skor_wlc::float as skor_wlc,
-        h.kelas_kesesuaian,
-        h.nilai_indikator,
-        COUNT(c.id_shop)::int as jumlah_coffee_shop
-      FROM grid g
-      INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
-      LEFT JOIN existing_coffee_shop c ON ST_Contains(g.geom, c.geom)
-      WHERE h.id_analysis_run = $1
-        AND g.kecamatan IS NOT NULL  -- Hanya grid di dalam wilayah studi
+      WHERE g.kecamatan IS NOT NULL
         AND ((h.nilai_indikator->>'sawah')::numeric = 0 OR (h.nilai_indikator->>'sempadan_sungai')::numeric = 0)
-      GROUP BY g.id_grid, h.id_hasil
-      ORDER BY g.kode_grid ASC
-      LIMIT $2
-    `, runId, limitSample);
+      ORDER BY h.skor_wlc ASC
+      LIMIT 1
+    `);
+
+    const formatSample = (row) => ({
+      ...row,
+      kelas_kesesuaian: mapDbClassToUi(row.kelas_kesesuaian)
+    });
 
     return {
       runInfo: {
         id_analysis_run: runId,
-        nama_run: activeRun.nama_run,
-        tanggal_hitung: activeRun.created_at,
+        nama_run: activeLayer.kode_layer,
+        tanggal_hitung: activeLayer.created_at,
         versi: runId,
       },
       summary: {
@@ -217,10 +221,10 @@ class ValidationService {
         }
       },
       sampel_grid: {
-        sesuai: sampelSesuai,
-        kurang_sesuai: sampelKurangSesuai,
-        tidak_sesuai_skor: sampelTidakSesuaiSkor,
-        pembatas_lahan: sampelPembatas
+        kepadatan_tinggi: sampelKepadatanTinggi.map(formatSample),
+        tanpa_kopi_kuat: sampelTanpaKopiKuat.map(formatSample),
+        tanpa_kopi_lemah: sampelTanpaKopiLemah.map(formatSample),
+        pembatas_lahan: sampelPembatasLahan.map(formatSample)
       }
     };
   }

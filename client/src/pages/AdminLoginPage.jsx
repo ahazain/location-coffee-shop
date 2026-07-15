@@ -9,13 +9,14 @@ import {
   UserRound,
 } from "lucide-react";
 import Card from "../components/common/Card";
+import { authService } from "../services/api";
 
 export default function AdminLoginPage() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
-    username: "admin",
-    password: "admin123",
+    email: "admin@spkkopi.com",
+    password: "admin12345",
   });
 
   const [errorMessage, setErrorMessage] = useState("");
@@ -23,27 +24,22 @@ export default function AdminLoginPage() {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    const username = form.username?.trim();
+    const email = form.email?.trim();
     const password = form.password?.trim();
 
-    if (!username || !password) {
-      setErrorMessage("Username dan password wajib diisi.");
+    if (!email || !password) {
+      setErrorMessage("Email dan password wajib diisi.");
       return;
     }
 
-    if (username === "admin" && password === "admin123") {
-      localStorage.setItem("admin_token", "dummy-admin-token");
-      localStorage.setItem(
-        "admin_profile",
-        JSON.stringify({
-          name: "Admin Sistem Lokasi Coffee Shop",
-          role: "Administrator",
-        })
-      );
+    try {
+      const data = await authService.login(email, password);
+      localStorage.setItem("admin_token", data.token);
+      localStorage.setItem("admin_profile", JSON.stringify(data.profile));
 
       navigate("/admin/datasets");
-    } else {
-      setErrorMessage("Username atau password salah.");
+    } catch (err) {
+      setErrorMessage(err.message || "Email atau password salah.");
     }
   }
 
@@ -101,8 +97,8 @@ export default function AdminLoginPage() {
         </div>
 
         <p className="relative text-sm text-blue-100/70">
-          Default demo: <span className="font-bold text-white">admin</span> /{" "}
-          <span className="font-bold text-white">admin123</span>
+          Default admin: <span className="font-bold text-white">admin@spkkopi.com</span> /{" "}
+          <span className="font-bold text-white">admin12345</span>
         </p>
       </section>
 
@@ -127,23 +123,23 @@ export default function AdminLoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <label className="block">
               <span className="text-sm font-semibold text-stone-700">
-                Username
+                Email
               </span>
 
               <div className="mt-2 flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50/50 px-4 py-3 transition focus-within:border-[#1D3557] focus-within:ring-4 focus-within:ring-blue-50/50">
                 <UserRound size={18} className="text-stone-400" />
 
                 <input
-                  type="text"
-                  value={form.username}
+                  type="email"
+                  value={form.email}
                   onChange={(event) =>
                     setForm({
                       ...form,
-                      username: event.target.value,
+                      email: event.target.value,
                     })
                   }
                   className="w-full bg-transparent text-sm font-medium text-stone-700 outline-none placeholder:text-stone-400"
-                  placeholder="Masukkan username"
+                  placeholder="Masukkan email admin"
                 />
               </div>
             </label>

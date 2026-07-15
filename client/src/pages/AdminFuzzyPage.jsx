@@ -132,11 +132,27 @@ export default function AdminFuzzyPage() {
 
   const selectedAturan = selectedId ? aturanMap[selectedId] : null;
 
-  const pendingCount = indikatorList.filter(
-    (ind) => !aturanMap[getIndikatorId(ind)]
+  const totalFuzzyInd = indikatorList.filter(
+    (ind) => ind.tipe_nilai !== "MASK"
   ).length;
 
-  const readyCount = indikatorList.length - pendingCount;
+  const needsProcessCount = indikatorList.filter((ind) => {
+    const isMask = ind.tipe_nilai === "MASK";
+    if (isMask) return false;
+    const hasRaw = ind.raster_layers?.some((r) => r.tipe_raster === "RAW");
+    const hasRule = !!aturanMap[getIndikatorId(ind)];
+    const hasFuzzy = ind.raster_layers?.some((r) => r.tipe_raster === "FUZZY");
+    return hasRaw && hasRule && !hasFuzzy;
+  }).length;
+
+  const completedCount = indikatorList.filter((ind) => {
+    const isMask = ind.tipe_nilai === "MASK";
+    if (isMask) return false;
+    const hasRaw = ind.raster_layers?.some((r) => r.tipe_raster === "RAW");
+    const hasRule = !!aturanMap[getIndikatorId(ind)];
+    const hasFuzzy = ind.raster_layers?.some((r) => r.tipe_raster === "FUZZY");
+    return hasRaw && hasRule && hasFuzzy;
+  }).length;
 
   const groupedIndikator = indikatorList.reduce((acc, indikator) => {
     const kriteriaId = getKriteriaId(indikator);
@@ -252,30 +268,35 @@ export default function AdminFuzzyPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-4">
+             <div className="flex flex-wrap gap-4">
               <div className="rounded-2xl bg-stone-50 p-4 text-center border border-stone-100">
                 <p className="text-2xl font-black text-[#1D3557]">
-                  {indikatorList.length}
+                  {totalFuzzyInd}
                 </p>
                 <p className="text-xs text-stone-500">Total Indikator</p>
               </div>
 
-              <div className="rounded-2xl bg-stone-50 p-4 text-center border border-stone-100">
-                <p className="text-2xl font-black text-[#1D3557]">
-                  {readyCount}
-                </p>
-                <p className="text-xs text-stone-500">Siap Diproses</p>
+              <div
+                className={`rounded-2xl p-4 text-center border transition ${
+                  needsProcessCount > 0
+                    ? "bg-blue-50 border-blue-100 text-blue-800 animate-pulse font-extrabold"
+                    : "bg-stone-50 border-stone-100 text-stone-500"
+                }`}
+              >
+                <p className="text-2xl font-black">{needsProcessCount}</p>
+                <p className="text-xs">Siap Diproses</p>
               </div>
 
               <div
-                className={`rounded-2xl p-4 text-center border ${pendingCount > 0
-                  ? "bg-amber-50 border-amber-100 text-amber-800"
-                  : "bg-emerald-50 border-emerald-100 text-emerald-800"
-                  }`}
+                className={`rounded-2xl p-4 text-center border transition ${
+                  completedCount === totalFuzzyInd
+                    ? "bg-emerald-50 border-emerald-100 text-emerald-800"
+                    : "bg-amber-50 border-amber-100 text-amber-800"
+                }`}
               >
-                <p className="text-2xl font-black">{pendingCount}</p>
+                <p className="text-2xl font-black">{completedCount}</p>
                 <p className="text-xs">
-                  {pendingCount > 0 ? "Belum Ada Aturan" : "Semua Siap"}
+                  {completedCount === totalFuzzyInd ? "Semua Selesai" : "Selesai"}
                 </p>
               </div>
             </div>
@@ -632,6 +653,17 @@ export default function AdminFuzzyPage() {
                             (item) => getIndikatorId(item) === id
                           ) + 1;
 
+                        const isMask = indikator.tipe_nilai === "MASK";
+                        const hasRaw = indikator.raster_layers?.some(
+                          (r) => r.tipe_raster === "RAW"
+                        );
+                        const hasRule = !!aturan;
+                        const hasFuzzy = indikator.raster_layers?.some(
+                          (r) => r.tipe_raster === "FUZZY"
+                        );
+                        const needsProcessing = !isMask && hasRaw && hasRule && !hasFuzzy;
+                        const canProcess = !isMask && hasRaw && hasRule && !isProcessing;
+
                         return (
                           <tr
                             key={id}
@@ -646,9 +678,19 @@ export default function AdminFuzzyPage() {
                             </td>
 
                             <td className="px-6 py-4 truncate">
-                              <p className="font-extrabold text-[#1D3557] text-xs sm:text-sm truncate">
-                                {indikator.nama_indikator}
-                              </p>
+                              <div className="flex items-center gap-2 truncate">
+                                {needsProcessing && (
+                                  <span
+                                    className="h-2 w-2 rounded-full bg-blue-500 animate-ping shrink-0"
+                                    title="Butuh kalkulasi/proses ulang"
+                                  />
+                                )}
+                                <p className={`font-extrabold text-xs sm:text-sm truncate ${
+                                  needsProcessing ? "text-blue-600" : "text-[#1D3557]"
+                                }`}>
+                                  {indikator.nama_indikator}
+                                </p>
+                              </div>
                             </td>
 
                             <td className="px-6 py-4 text-stone-500 font-semibold text-xs truncate">
@@ -658,19 +700,50 @@ export default function AdminFuzzyPage() {
                             </td>
 
                             <td className="px-6 py-4">
-                              <span
-                                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider ${aturan
-                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                                  : "bg-amber-50 text-amber-700 border border-amber-100"
-                                  }`}
-                              >
-                                {aturan ? (
-                                  <CheckCircle2 size={13} />
-                                ) : (
-                                  <AlertTriangle size={13} />
-                                )}
-                                {aturan ? "Siap" : "Pending"}
-                              </span>
+                              {(() => {
+                                if (isMask) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-stone-100 text-stone-600 border border-stone-200">
+                                      <Database size={13} />
+                                      Constraint
+                                    </span>
+                                  );
+                                }
+
+                                if (!hasRaw) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-stone-50 text-stone-400 border border-stone-200/50">
+                                      <AlertTriangle size={13} />
+                                      No Dataset
+                                    </span>
+                                  );
+                                }
+
+                                if (!hasRule) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-100">
+                                      <AlertTriangle size={13} />
+                                      No Rule
+                                    </span>
+                                  );
+                                }
+
+                                if (!hasFuzzy) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-100 animate-pulse">
+                                      <RefreshCcw size={13} className="animate-spin shrink-0" />
+                                      Fuzzy Ulang
+                                    </span>
+                                  );
+                                }
+
+                                return (
+                                  <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                    <CheckCircle2 size={13} />
+                                    Selesai
+                                  </span>
+                                );
+                              })()}
                             </td>
 
                             <td className="px-6 py-4 text-right">
@@ -680,12 +753,12 @@ export default function AdminFuzzyPage() {
                                   event.stopPropagation();
                                   handleCalculate(id);
                                 }}
-                                disabled={!aturan || isProcessing}
-                                className={`rounded-lg p-1.5 transition active:scale-90 ${!aturan || isProcessing
+                                disabled={!canProcess}
+                                className={`rounded-lg p-1.5 transition active:scale-90 ${!canProcess
                                   ? "text-stone-200 cursor-not-allowed"
                                   : "text-stone-400 hover:text-[#1D3557] hover:bg-stone-100 cursor-pointer"
                                   }`}
-                                title="Hitung Fuzzy"
+                                title={hasRaw ? "Hitung Fuzzy" : "Upload dataset terlebih dahulu"}
                               >
                                 <Sigma size={15} />
                               </button>

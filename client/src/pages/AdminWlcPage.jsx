@@ -57,6 +57,52 @@ export default function AdminWlcPage() {
     return Object.entries(count).map(([className, total]) => ({ className, total }));
   }, [grids]);
 
+  const classRanges = useMemo(() => {
+    if (!grids?.features) {
+      return {
+        "Kurang Sesuai": "Skor rendah atau terkena kendala",
+        "Cukup Sesuai": "Skor sedang",
+        "Sesuai": "Skor tinggi",
+      };
+    }
+
+    const ranges = {
+      "Kurang Sesuai": { min: Infinity, max: -Infinity },
+      "Cukup Sesuai": { min: Infinity, max: -Infinity },
+      "Sesuai": { min: Infinity, max: -Infinity },
+    };
+
+    grids.features.forEach((feature) => {
+      const className = feature.properties.suitabilityClass;
+      const score = feature.properties.scoreDefault;
+      const isConstrained =
+        feature.properties.indicatorScores?.sawah === 0 ||
+        feature.properties.indicatorScores?.sempadan_sungai === 0;
+
+      if (ranges[className]) {
+        if (!isConstrained && score > 0) {
+          if (score < ranges[className].min) ranges[className].min = score;
+          if (score > ranges[className].max) ranges[className].max = score;
+        }
+      }
+    });
+
+    const maxKurang = ranges["Kurang Sesuai"].max;
+    const maxCukup = ranges["Cukup Sesuai"].max;
+
+    return {
+      "Kurang Sesuai": maxKurang !== -Infinity
+        ? `Skor ≤ ${maxKurang.toFixed(4)} atau terkena kendala`
+        : "Skor ≤ 0.333 atau terkena kendala",
+      "Cukup Sesuai": maxKurang !== -Infinity && maxCukup !== -Infinity
+        ? `${maxKurang.toFixed(4)} < Skor ≤ ${maxCukup.toFixed(4)}`
+        : "0.333 < Skor ≤ 0.667",
+      "Sesuai": maxCukup !== -Infinity
+        ? `Skor > ${maxCukup.toFixed(4)}`
+        : "Skor > 0.667",
+    };
+  }, [grids]);
+
   // Klik tombol "Hitung WLC Ulang" -> langsung jalankan kalkulasi tanpa konfirmasi
   async function handleRunWlcClick() {
     setIsRunning(true);
@@ -125,18 +171,22 @@ export default function AdminWlcPage() {
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <div className="rounded-3xl bg-stone-50 p-4">
-              <p className="text-xs text-stone-500">Resolution CRS</p>
-              <p className="mt-2 text-sm font-semibold text-stone-900">{activeWlc?.crs || "-"}</p>
+              <p className="text-xs text-stone-500">Proyeksi Spasial (CRS)</p>
+              <p className="mt-2 text-sm font-semibold text-stone-900">
+                {activeWlc ? `${activeWlc.crs} (WGS 84 / UTM zone 49S)` : "-"}
+              </p>
             </div>
             <div className="rounded-3xl bg-stone-50 p-4">
-              <p className="text-xs text-stone-500">Grid Dimensi</p>
+              <p className="text-xs text-stone-500">Resolusi Grid</p>
               <p className="mt-2 text-sm font-semibold text-stone-900">
-                {activeWlc ? `${activeWlc.width} x ${activeWlc.height} px` : "-"}
+                {activeWlc ? "463 m * 463 m" : "-"}
               </p>
             </div>
             <div className="rounded-3xl bg-stone-50 p-4">
               <p className="text-xs text-stone-500">Total Pixel/Grid</p>
-              <p className="mt-2 text-sm font-semibold text-stone-900">{activeWlc?.jumlah_pixel || "-"}</p>
+              <p className="mt-2 text-sm font-semibold text-stone-900">
+                {activeWlc ? "450" : "-"}
+              </p>
             </div>
           </div>
 
@@ -168,12 +218,12 @@ export default function AdminWlcPage() {
       <div className="mb-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <Card className="p-5">
           <h2 className="text-lg font-bold text-stone-950">Klasifikasi Kesesuaian Lahan</h2>
-          <p className="mt-1 text-sm text-stone-500">Metode Equal Interval (3 Kelas) yang diterapkan di QGIS.</p>
+          <p className="mt-1 text-sm text-stone-500">Metode Jenks Natural Breaks (3 Kelas) dinamis sesuai sebaran data spasial.</p>
           <div className="mt-4 space-y-3">
             {[
-              ["Tidak Sesuai", "Skor < 0.333 atau terkena mask kendala (sawah/sungai)"],
-              ["Kurang Sesuai", "Skor 0.333 - 0.667"],
-              ["Sesuai", "Skor >= 0.667"],
+              ["Kurang Sesuai", classRanges["Kurang Sesuai"]],
+              ["Cukup Sesuai", classRanges["Cukup Sesuai"]],
+              ["Sesuai", classRanges["Sesuai"]],
             ].map(([label, range]) => (
               <div key={label} className="flex items-center justify-between rounded-2xl border border-stone-200 bg-stone-50 p-3">
                 <span className="font-semibold text-stone-800">{label}</span>

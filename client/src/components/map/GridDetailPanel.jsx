@@ -83,7 +83,7 @@ export default function GridDetailPanel({ selectedGrid }) {
                 <span className="mt-1 font-bold">{scores.sawah === 0 ? "⚠️ Melanggar" : "✅ Aman"}</span>
               </div>
               <div className={`rounded-xl p-2.5 border flex flex-col justify-between ${scores.sempadan_sungai === 0 ? "border-red-200 bg-red-50 text-red-700" : "border-stone-200 bg-stone-50 text-stone-600"}`}>
-                <span className="text-[10px] uppercase font-semibold">Sempadan Sungai</span>
+                <span className="text-[10px] uppercase font-semibold">Sungai</span>
                 <span className="mt-1 font-bold">{scores.sempadan_sungai === 0 ? "⚠️ Melanggar" : "✅ Aman"}</span>
               </div>
             </div>
@@ -102,17 +102,30 @@ export default function GridDetailPanel({ selectedGrid }) {
               const backendKey = codeMapping[item.code] || item.code;
               const rawVal = scores[backendKey] !== undefined ? scores[backendKey] : "-";
               const fuzzyVal = scores["fuzzy_" + backendKey] !== undefined ? scores["fuzzy_" + backendKey] : "-";
+              const bobotVal = scores["bobot_" + backendKey] !== undefined ? scores["bobot_" + backendKey] : "-";
+              const terbobotVal = scores["terbobot_" + backendKey] !== undefined ? scores["terbobot_" + backendKey] : "-";
 
               return (
-                <div key={item.code} className="text-xs flex flex-col gap-1 border-b border-stone-50 pb-2">
+                <div key={item.code} className="text-xs flex flex-col gap-1.5 border-b border-stone-100 pb-2">
                   <div className="flex justify-between items-start">
                     <span className="font-semibold text-stone-850 leading-tight pr-2">{item.name}</span>
                     <span className="shrink-0 text-[10px] font-mono rounded bg-stone-100 px-1.5 py-0.5 text-stone-600 font-bold">
                       Fuzzy: <span className="text-stone-950 font-bold">{typeof fuzzyVal === "number" ? fuzzyVal.toFixed(3) : fuzzyVal}</span>
                     </span>
                   </div>
-                  <div className="text-[11px] text-stone-500">
-                    Nilai: <strong className="text-stone-700 font-mono">{rawVal}</strong> <span className="text-[10px] text-stone-400">{item.unit}</span>
+                  <div className="grid grid-cols-3 gap-2 bg-stone-50 rounded-lg p-1.5 text-[10px] text-stone-650 font-mono">
+                    <div>
+                      <span className="text-[9px] uppercase text-stone-400 block font-sans">Nilai Asli</span>
+                      <span className="font-bold text-stone-800">{rawVal}</span> <span className="text-[8px] text-stone-400 font-sans">{item.unit}</span>
+                    </div>
+                    <div className="border-l border-stone-200 pl-2">
+                      <span className="text-[9px] uppercase text-stone-400 block font-sans">Bobot AHP</span>
+                      <span className="font-bold text-stone-800">{typeof bobotVal === "number" ? bobotVal.toFixed(4) : bobotVal}</span>
+                    </div>
+                    <div className="border-l border-stone-200 pl-2">
+                      <span className="text-[9px] uppercase text-stone-400 block font-sans">Terbobot</span>
+                      <span className="font-bold text-stone-900">{typeof terbobotVal === "number" ? terbobotVal.toFixed(4) : terbobotVal}</span>
+                    </div>
                   </div>
                 </div>
               );

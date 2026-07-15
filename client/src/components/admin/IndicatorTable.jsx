@@ -3,11 +3,9 @@ import { Edit2, Trash2, Folder } from "lucide-react";
 import Badge from "../common/Badge";
 import Card from "../common/Card";
 
-function fuzzyLabel(type) {
-  if (type === "linear_increasing") return "Benefit (Linear Increasing)";
-  if (type === "linear_decreasing") return "Cost (Linear Decreasing)";
-  if (type === "near") return "Optimum (Near)";
-  return type || "-";
+function formatTipeNilai(type) {
+  if (!type) return "-";
+  return type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
 }
 
 export default function IndicatorTable({ indicators, loading, onEdit, onDelete }) {
@@ -47,7 +45,7 @@ export default function IndicatorTable({ indicators, loading, onEdit, onDelete }
             <tr>
               <th className="px-6 py-4 w-16 text-center">NO</th>
               <th className="px-6 py-4">INDIKATOR</th>
-              <th className="px-6 py-4">TIPE FUZZY</th>
+              <th className="px-6 py-4">TIPE NILAI</th>
               <th className="px-6 py-4 w-24 text-right">AKSI</th>
             </tr>
           </thead>
@@ -81,8 +79,8 @@ export default function IndicatorTable({ indicators, loading, onEdit, onDelete }
                     >
                       <span className="flex items-center gap-2">
                         <Folder
-                          size={14}
-                          className="text-amber-500 fill-amber-100"
+                           size={14}
+                           className="text-amber-500 fill-amber-100"
                         />
                         Kriteria: {group.nama}
                       </span>
@@ -110,7 +108,7 @@ export default function IndicatorTable({ indicators, loading, onEdit, onDelete }
 
                         <td className="px-6 py-4">
                           <Badge variant="amber">
-                            {fuzzyLabel(indicator.fungsi_fuzzy)}
+                            {formatTipeNilai(indicator.tipe_nilai)}
                           </Badge>
                         </td>
 

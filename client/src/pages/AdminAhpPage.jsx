@@ -496,10 +496,12 @@ export default function AdminAhpPage() {
 
       const mappedKriteria = getArrayData(kriteriaData)
         .map(mapKriteriaItem)
+        .filter((item) => item.id !== 6 && item.code !== "6")
         .sort((a, b) => a.urutan - b.urutan);
 
       const mappedIndikator = getArrayData(indikatorData)
         .map(mapIndikatorItem)
+        .filter((item) => item.criteriaId !== 6 && item.criteriaCode !== "6")
         .sort((a, b) => a.urutan - b.urutan);
 
       setKonsensus(konsensusData);
@@ -639,7 +641,9 @@ export default function AdminAhpPage() {
 
   const sortedKonsensusIndikator = useMemo(() => {
     return [...(konsensus?.bobot_indikator || [])].sort(
-      (a, b) => Number(b.bobot_akhir || 0) - Number(a.bobot_akhir || 0)
+      (a, b) =>
+        Number(b.bobot_rata_rata || b.bobot_akhir || 0) -
+        Number(a.bobot_rata_rata || a.bobot_akhir || 0)
     );
   }, [konsensus]);
 
@@ -807,6 +811,11 @@ export default function AdminAhpPage() {
       throw new Error(
         "Method saveIndikatorAHP belum ada di frontend ahpService."
       );
+    }
+
+    if (methodName === "saveIndikator") {
+      const { id_kriteria, ...rest } = payload;
+      return ahpService.saveIndikator(id_kriteria, rest);
     }
 
     return ahpService[methodName](payload);
@@ -1564,7 +1573,10 @@ export default function AdminAhpPage() {
                       )}
 
                       <td className="px-6 py-4 text-right font-extrabold text-[#1D3557] border-l border-stone-100">
-                        {formatFractionPercent(item.bobot_akhir, 4)}
+                        {formatFractionPercent(
+                          item.bobot_rata_rata || item.bobot_akhir,
+                          4
+                        )}
                       </td>
                     </tr>
                   ))

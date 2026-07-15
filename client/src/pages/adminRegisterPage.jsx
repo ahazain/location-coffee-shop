@@ -11,13 +11,13 @@ import {
   UserRound,
 } from "lucide-react";
 import Card from "../components/common/Card";
+import { authService } from "../services/api";
 
 export default function AdminRegisterPage() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
     name: "",
-    username: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -25,16 +25,15 @@ export default function AdminRegisterPage() {
 
   const [errorMessage, setErrorMessage] = useState("");
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     const name = form.name.trim();
-    const username = form.username.trim();
     const email = form.email.trim();
     const password = form.password.trim();
     const confirmPassword = form.confirmPassword.trim();
 
-    if (!name || !username || !email || !password || !confirmPassword) {
+    if (!name || !email || !password || !confirmPassword) {
       setErrorMessage("Semua field wajib diisi.");
       return;
     }
@@ -44,17 +43,12 @@ export default function AdminRegisterPage() {
       return;
     }
 
-    localStorage.setItem(
-      "pending_admin_register",
-      JSON.stringify({
-        name,
-        username,
-        email,
-        role: "Administrator",
-      })
-    );
-
-    navigate("/admin/login");
+    try {
+      await authService.register(name, email, password);
+      navigate("/admin/login");
+    } catch (err) {
+      setErrorMessage(err.message || "Registrasi gagal.");
+    }
   }
 
   return (
@@ -147,29 +141,6 @@ export default function AdminRegisterPage() {
                   }
                   className="w-full bg-transparent text-sm font-medium text-stone-700 outline-none placeholder:text-stone-400"
                   placeholder="Masukkan nama lengkap"
-                />
-              </div>
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-semibold text-stone-700">
-                Username
-              </span>
-
-              <div className="mt-2 flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50/50 px-4 py-3 transition focus-within:border-[#1D3557] focus-within:ring-4 focus-within:ring-blue-50/50">
-                <UserRound size={18} className="text-stone-400" />
-
-                <input
-                  type="text"
-                  value={form.username}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      username: event.target.value,
-                    })
-                  }
-                  className="w-full bg-transparent text-sm font-medium text-stone-700 outline-none placeholder:text-stone-400"
-                  placeholder="Masukkan username"
                 />
               </div>
             </label>

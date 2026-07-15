@@ -65,12 +65,6 @@ export default function LandingPage() {
             >
               Atur Bobot AHP Saya
             </a>
-            <a
-              href="/admin/login"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-6 py-3 text-xs font-bold uppercase tracking-wider text-stone-600 shadow-xs transition hover:bg-stone-50 active:scale-95"
-            >
-              Login Admin
-            </a>
           </div>
 
           <div className="mt-10 grid max-w-2xl grid-cols-3 gap-3">

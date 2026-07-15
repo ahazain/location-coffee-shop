@@ -8,6 +8,7 @@ import AdminLayout from "../layouts/AdminLayout";
 import ValidationMapView from "../components/map/ValidationMapView";
 import { wlcService } from "../services/api/wlcService";
 import { getSuitabilityColor } from "../utils/mapStyle";
+import GridDetailPanel from "../components/map/GridDetailPanel";
 
 export default function AdminValidationPage() {
   const [gridGeojson, setGridGeojson] = useState(null);
@@ -17,7 +18,7 @@ export default function AdminValidationPage() {
   const [selectedGrid, setSelectedGrid] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeSampleTab, setActiveSampleTab] = useState("tidak_sesuai_skor");
+  const [activeSampleTab, setActiveSampleTab] = useState("kepadatan_tinggi");
 
   async function loadValidationData() {
     try {
@@ -38,8 +39,8 @@ export default function AdminValidationPage() {
       setBoundaryGeojson(boundary);
       
       // Pilih default grid pertama dari sampel jika ada
-      if (stats?.sampel_grid?.tidak_sesuai_skor?.length > 0) {
-        setSelectedGrid(stats.sampel_grid.tidak_sesuai_skor[0]);
+      if (stats?.sampel_grid?.kepadatan_tinggi?.length > 0) {
+        setSelectedGrid(stats.sampel_grid.kepadatan_tinggi[0]);
       }
     } catch (err) {
       console.error("Gagal memuat data validasi:", err);
@@ -53,9 +54,9 @@ export default function AdminValidationPage() {
     loadValidationData();
   }, []);
 
-  // Hitung persentase kecocokan model (Sesuai + Kurang Sesuai)
+  // Hitung persentase kecocokan model (Sesuai + Cukup Sesuai)
   const matchingStats = validationStats?.sebaran_kelas?.reduce((acc, item) => {
-    if (item.kelas_kesesuaian === "Sesuai" || item.kelas_kesesuaian === "Kurang Sesuai") {
+    if (item.kelas_kesesuaian === "Sesuai" || item.kelas_kesesuaian === "Cukup Sesuai") {
       acc.jumlah += item.jumlah;
       acc.persentase += item.persentase;
     }
@@ -113,6 +114,18 @@ export default function AdminValidationPage() {
     );
   };
 
+  const formatGridForDetail = (grid) => {
+    if (!grid) return null;
+    return {
+      gridCode: grid.kode_grid || grid.gridCode,
+      suitabilityClass: grid.kelas_kesesuaian || grid.suitabilityClass,
+      kecamatan: grid.kecamatan,
+      kelurahan: grid.kelurahan,
+      scoreDefault: grid.skor_wlc ?? grid.scoreDefault,
+      indicatorScores: grid.nilai_indikator || grid.indicatorScores
+    };
+  };
+
   return (
     <AdminLayout>
       {/* 1. Header Section */}
@@ -125,7 +138,7 @@ export default function AdminValidationPage() {
             </div>
             <h2 className="mt-3 text-2xl font-black text-stone-900">Validasi Spasial Kesesuaian Lahan</h2>
             <p className="mt-2 text-sm leading-relaxed text-stone-500 max-w-3xl">
-              Halaman ini menguji akurasi matematis analisis *Weighted Linear Combination* (WLC) dengan sebaran **22 kedai kopi eksisting** (ground truth) di lapangan serta memvalidasi kepatuhan terhadap batasan (*constraints*).
+              Validasi spasial dilakukan untuk memeriksa apakah skor dan kelas kesesuaian hasil WLC sudah mencerminkan kondisi keruangan yang logis di wilayah studi. Proses ini dilakukan dengan menjadikan kepadatan coffee shop eksisting sebagai acuan pembanding, karena keberadaan coffee shop yang sudah berdiri dan beroperasi dapat dianggap sebagai representasi lokasi yang secara nyata sudah dipilih dan berjalan di lapangan.
             </p>
           </div>
           <div className="shrink-0">
@@ -149,7 +162,7 @@ export default function AdminValidationPage() {
             <span className="text-xs text-stone-500">({matchingStats.jumlah} / 22 outlet)</span>
           </div>
           <p className="mt-2 text-xs text-stone-400 leading-relaxed">
-            Persentase kedai kopi eksisting yang sukses berada di zona yang dinilai <strong>Sesuai</strong> atau <strong>Kurang Sesuai</strong> oleh model WLC.
+            Persentase kedai kopi eksisting yang sukses berada di zona yang dinilai <strong>Sesuai</strong> atau <strong>Cukup Sesuai</strong> oleh model WLC.
           </p>
         </Card>
 
@@ -218,234 +231,157 @@ export default function AdminValidationPage() {
 
         {/* Right Details Panel */}
         <aside className="space-y-4">
-          {/* Sebaran Detail */}
+          {/* Petunjuk Inspeksi */}
           <Card className="p-5 border border-stone-200/50 bg-white shadow-sm">
-            <h3 className="text-sm font-bold text-stone-900 border-b border-stone-100 pb-3">Sebaran Kelas Kesesuaian</h3>
-            <div className="mt-4 space-y-4">
-              {validationStats?.sebaran_kelas?.map((item) => {
-                const isSesuai = item.kelas_kesesuaian === "Sesuai";
-                const isKurang = item.kelas_kesesuaian === "Kurang Sesuai";
-                
-                let progressColor = "bg-red-500";
-                let badgeColor = "bg-red-50 text-red-600";
-                if (isSesuai) {
-                  progressColor = "bg-green-600";
-                  badgeColor = "bg-green-50 text-green-600";
-                } else if (isKurang) {
-                  progressColor = "bg-yellow-500";
-                  badgeColor = "bg-yellow-50 text-yellow-600";
-                }
-
-                return (
-                  <div key={item.kelas_kesesuaian} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-stone-700">{item.kelas_kesesuaian}</span>
-                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${badgeColor}`}>
-                        {item.jumlah} outlet ({item.persentase}%)
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-stone-100 overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full ${progressColor}`} 
-                        style={{ width: `${item.persentase}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                );
-              })}
+            <h3 className="text-sm font-bold text-stone-900 border-b border-stone-100 pb-3">Petunjuk Inspeksi Spasial</h3>
+            <div className="mt-4 text-xs text-stone-500 leading-relaxed space-y-2">
+              <p>
+                1. Klik salah satu sel grid di peta atau klik tombol <strong>Audit</strong> pada tabel sampel di bawah.
+              </p>
+              <p>
+                2. Detail lengkap indikator raw dan fuzzy akan ditampilkan pada <strong>Panel Rinci Inspeksi</strong> di bagian bawah halaman.
+              </p>
+              <p>
+                3. Bandingkan kesesuaian nilai WLC dengan sebaran kedai kopi lapangan secara langsung.
+              </p>
             </div>
-          </Card>
-
-          {/* Rincian Pelanggaran Constraint */}
-          <Card className="p-5 border border-stone-200/50 bg-white shadow-sm">
-            <h3 className="text-sm font-bold text-stone-900 border-b border-stone-100 pb-3">Pelanggaran Area Pembatas</h3>
-            <div className="mt-4 space-y-3">
-              <div className="rounded-2xl border border-red-100 bg-red-50/40 p-3 flex gap-3 items-start">
-                <div className="rounded-lg bg-red-100 p-1 text-red-600 shrink-0">
-                  <ShieldAlert size={16} />
-                </div>
-                <div className="text-xs">
-                  <p className="font-bold text-red-950">Padi Sawah Irigasi</p>
-                  <p className="mt-0.5 text-stone-500">
-                    <strong>{validationStats?.pelanggaran_constraint?.rincian?.sawah} outlet</strong> berdiri di lahan sawah aktif.
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-red-100 bg-red-50/40 p-3 flex gap-3 items-start">
-                <div className="rounded-lg bg-red-100 p-1 text-red-600 shrink-0">
-                  <ShieldAlert size={16} />
-                </div>
-                <div className="text-xs">
-                  <p className="font-bold text-red-950">Sempadan Sungai</p>
-                  <p className="mt-0.5 text-stone-500">
-                    <strong>{validationStats?.pelanggaran_constraint?.rincian?.sempadan_sungai} outlet</strong> berada di sempadan/aliran sungai.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* Detail Grid Terpilih */}
-          <Card className="p-5 border border-stone-200/50 bg-white shadow-sm">
-            <h3 className="text-sm font-bold text-stone-900 border-b border-stone-100 pb-3">Detail Grid Inspeksi</h3>
-            {selectedGrid ? (
-              <div className="mt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-stone-900">{selectedGrid.kode_grid}</span>
-                  <span className="text-xs text-stone-400 font-medium">
-                    {selectedGrid.kecamatan || "Luar Wilayah"}, {selectedGrid.kelurahan || "-"}
-                  </span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2 text-center text-xs">
-                  <div className="rounded-xl bg-stone-50 p-2.5 border border-stone-100">
-                    <p className="text-[10px] text-stone-400 font-semibold uppercase">Skor WLC</p>
-                    <p className="mt-1 text-sm font-black font-mono text-stone-900">{selectedGrid.skor_wlc?.toFixed(4) || "0.00"}</p>
-                  </div>
-                  <div className="rounded-xl bg-stone-50 p-2.5 border border-stone-100">
-                    <p className="text-[10px] text-stone-400 font-semibold uppercase">Kelas</p>
-                    <p className="mt-1 text-xs font-bold" style={{ color: getSuitabilityColor(selectedGrid.kelas_kesesuaian) }}>
-                      {selectedGrid.kelas_kesesuaian}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-2">Nilai Indikator Audit</p>
-                  <div className="rounded-2xl border border-stone-100 p-2 bg-stone-50/50 space-y-1">
-                    {renderIndicatorScore("sawah", selectedGrid.nilai_indikator?.sawah === 1 ? "1 (Terkena)" : "0 (Aman)", "")}
-                    {renderIndicatorScore("sempadan_sungai", selectedGrid.nilai_indikator?.sempadan_sungai === 1 ? "1 (Terkena)" : "0 (Aman)", "")}
-                    {renderIndicatorScore("kepadatan_hunian", selectedGrid.nilai_indikator?.kepadatan_hunian ?? 0, "unit/km2")}
-                    {renderIndicatorScore("kepadatan_populasi", selectedGrid.nilai_indikator?.kepadatan_populasi ?? 0, "jiwa/km2")}
-                    {renderIndicatorScore("jarak_jalan_utama", selectedGrid.nilai_indikator?.jarak_jalan_utama ?? 0, "meter")}
-                    {renderIndicatorScore("jarak_kopi_terdekat", selectedGrid.nilai_indikator?.jarak_coffee_shop_existing_terdekat ?? 0, "meter")}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-8 text-center text-xs text-stone-400 py-6">
-                <Info size={24} className="mx-auto text-stone-300 mb-2" />
-                Klik salah satu sel grid di peta atau di tabel bawah untuk mengaudit indikatornya.
-              </div>
-            )}
           </Card>
         </aside>
       </div>
 
-      {/* 4. Representative Sample Grid Audit Tabs */}
-      <Card className="p-6 border border-stone-200/50 bg-white shadow-sm">
-        <div className="border-b border-stone-100 pb-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-          <div>
-            <h3 className="text-base font-bold text-stone-900">Audit Sampel Grid Wilayah</h3>
-            <p className="text-xs text-stone-400 mt-1">Gunakan tabel ini untuk melihat kesesuaian parameter grid dengan fakta kondisi lapangan.</p>
-          </div>
+      {/* Detail Inspeksi Lengkap */}
+      <div className="mb-6">
+        <GridDetailPanel selectedGrid={formatGridForDetail(selectedGrid)} />
+      </div>
 
-          {/* Tab buttons */}
-          <div className="flex flex-wrap gap-1.5 bg-stone-100 p-1 rounded-xl text-xs font-semibold text-stone-600">
-            <button 
-              onClick={() => setActiveSampleTab("tidak_sesuai_skor")}
-              className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${activeSampleTab === "tidak_sesuai_skor" ? "bg-white text-stone-950 shadow-xs" : "hover:text-stone-950"}`}
-            >
-              Tidak Sesuai (Skor)
-            </button>
-            <button 
-              onClick={() => setActiveSampleTab("pembatas_lahan")}
-              className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${activeSampleTab === "pembatas_lahan" ? "bg-white text-stone-950 shadow-xs" : "hover:text-stone-950"}`}
-            >
-              Pembatas (Constraint)
-            </button>
-            <button 
-              onClick={() => setActiveSampleTab("kurang_sesuai")}
-              className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${activeSampleTab === "kurang_sesuai" ? "bg-white text-stone-950 shadow-xs" : "hover:text-stone-950"}`}
-            >
-              Kurang Sesuai
-            </button>
-            <button 
-              onClick={() => setActiveSampleTab("sesuai")}
-              className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${activeSampleTab === "sesuai" ? "bg-white text-stone-950 shadow-xs" : "hover:text-stone-950"}`}
-            >
-              Sesuai
-            </button>
-          </div>
+      {/* 4. Representative Sample Grid Audit Cards */}
+      <Card className="p-6 border border-stone-200/50 bg-white shadow-sm">
+        <div>
+          <h3 className="text-base font-bold text-stone-900">Audit Sampel Grid Wilayah</h3>
+          <p className="text-xs text-stone-400 mt-1">Pilih salah satu grid sampel audit di bawah ini untuk melihat detail kecocokan parameter spasial di lapangan.</p>
         </div>
 
-        {/* Tab content table */}
-        <div className="mt-5 overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-stone-200 text-stone-500 font-bold">
-                <th className="py-3 px-4">Kode Grid</th>
-                <th className="py-3 px-4">Kecamatan</th>
-                <th className="py-3 px-4">Kelurahan</th>
-                <th className="py-3 px-4 text-center">Skor WLC</th>
-                <th className="py-3 px-4 text-center">Kelas</th>
-                <th className="py-3 px-4">Status Constraint</th>
-                <th className="py-3 px-4 text-center">Coffee Shop Terkait</th>
-                <th className="py-3 px-4 text-right">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {validationStats?.sampel_grid[activeSampleTab]?.length > 0 ? (
-                validationStats.sampel_grid[activeSampleTab].map((grid) => {
-                  const isSawah = grid.nilai_indikator?.sawah === 0;
-                  const isSungai = grid.nilai_indikator?.sempadan_sungai === 0;
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            {
+              key: "kepadatan_tinggi",
+              label: "Kepadatan Tertinggi",
+              grid: validationStats?.sampel_grid?.kepadatan_tinggi?.[0],
+              badgeStyle: "bg-amber-50 text-amber-700 border border-amber-100",
+              desc: "Memiliki jumlah outlet coffee shop terbanyak yang aktif beroperasi saat ini di lapangan."
+            },
+            {
+              key: "tanpa_kopi_kuat",
+              label: "Tanpa Pesaing (Sesuai)",
+              grid: validationStats?.sampel_grid?.tanpa_kopi_kuat?.[0],
+              badgeStyle: "bg-green-50 text-green-700 border border-green-100",
+              desc: "Bebas dari pesaing terdekat dan dinilai sangat potensial (Sesuai) menurut model WLC."
+            },
+            {
+              key: "tanpa_kopi_lemah",
+              label: "Tanpa Pesaing (Kurang Sesuai)",
+              grid: validationStats?.sampel_grid?.tanpa_kopi_lemah?.[0],
+              badgeStyle: "bg-blue-50 text-blue-700 border border-blue-100",
+              desc: "Bebas dari pesaing namun memiliki potensi pasar atau aksesibilitas yang sangat rendah."
+            },
+            {
+              key: "pembatas_lahan",
+              label: "Area Constraint",
+              grid: validationStats?.sampel_grid?.pembatas_lahan?.[0],
+              badgeStyle: "bg-red-50 text-red-700 border border-red-100",
+              desc: "Berada di atas kawasan perlindungan lingkungan (Sawah Irigasi atau Sempadan Sungai) sehingga tidak boleh dibangun."
+            }
+          ].map(({ key, label, grid, badgeStyle, desc }) => {
+            if (!grid) return null;
+            const isSelected = selectedGrid?.kode_grid === grid.kode_grid;
+            const isSawah = grid.nilai_indikator?.sawah === 0;
+            const isSungai = grid.nilai_indikator?.sempadan_sungai === 0;
+
+            return (
+              <div
+                key={key}
+                onClick={() => setSelectedGrid(grid)}
+                className={`relative flex flex-col justify-between rounded-3xl p-5 border transition-all duration-300 cursor-pointer select-none h-full hover:shadow-md ${
+                  isSelected 
+                    ? "border-[#1D3557] bg-stone-50/50 shadow-md ring-2 ring-[#1D3557]/20 scale-[1.02]" 
+                    : "border-stone-200/80 bg-white hover:border-stone-400"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${badgeStyle}`}>
+                      {label}
+                    </span>
+                    <span className="text-[10px] text-stone-400 font-medium font-mono">
+                      {grid.kecamatan || "-"}
+                    </span>
+                  </div>
+
+                  <h4 className="mt-4 text-2xl font-black text-stone-900 tracking-tight">
+                    {grid.kode_grid}
+                  </h4>
+                  <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">
+                    Kel. {grid.kelurahan || "-"}
+                  </p>
                   
-                  return (
-                    <tr 
-                      key={grid.kode_grid} 
-                      className={`border-b border-stone-100 hover:bg-stone-50/50 transition cursor-pointer ${selectedGrid?.kode_grid === grid.kode_grid ? "bg-stone-50" : ""}`}
-                      onClick={() => setSelectedGrid(grid)}
-                    >
-                      <td className="py-3.5 px-4 font-bold text-stone-900">{grid.kode_grid}</td>
-                      <td className="py-3.5 px-4 text-stone-600">{grid.kecamatan || "Luar Wilayah"}</td>
-                      <td className="py-3.5 px-4 text-stone-600">{grid.kelurahan || "-"}</td>
-                      <td className="py-3.5 px-4 text-center font-mono font-bold text-stone-900">{grid.skor_wlc?.toFixed(5) || "0.0000"}</td>
-                      <td className="py-3.5 px-4 text-center font-bold" style={{ color: getSuitabilityColor(grid.kelas_kesesuaian) }}>
+                  <p className="text-[10px] text-stone-500 mt-3 leading-normal italic min-h-[32px]">
+                    {desc}
+                  </p>
+
+                  <div className="mt-4 pt-3 border-t border-stone-100 space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-stone-400">Skor WLC</span>
+                      <span className="font-mono font-bold text-stone-900">
+                        {grid.skor_wlc?.toFixed(5) || "0.00000"}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-stone-400">Kelas</span>
+                      <span 
+                        className="font-bold text-[11px]" 
+                        style={{ color: getSuitabilityColor(grid.kelas_kesesuaian) }}
+                      >
                         {grid.kelas_kesesuaian}
-                      </td>
-                      <td className="py-3.5 px-4">
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-start text-xs pt-1">
+                      <span className="text-stone-400">Constraint</span>
+                      <div className="flex flex-col items-end gap-1">
                         {isSawah || isSungai ? (
-                          <div className="flex gap-1 text-[10px] font-bold">
-                            {isSawah && <span className="bg-red-50 text-red-600 px-1.5 py-0.5 rounded-md">🌾 Sawah</span>}
-                            {isSungai && <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md">🌊 Sungai</span>}
+                          <div className="flex flex-wrap justify-end gap-1 text-[9px] font-bold">
+                            {isSawah && <span className="bg-red-50 text-red-600 px-1 rounded-md">🌾 Sawah</span>}
+                            {isSungai && <span className="bg-blue-50 text-blue-600 px-1 rounded-md">🌊 Sungai</span>}
                           </div>
                         ) : (
-                          <span className="text-stone-400">Aman (Non-Constraint)</span>
+                          <span className="text-stone-400 text-[10px]">Aman</span>
                         )}
-                      </td>
-                      <td className="py-3.5 px-4 text-center font-bold text-stone-700">
-                        {grid.jumlah_coffee_shop > 0 ? (
-                          <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-amber-700">
-                            {grid.jumlah_coffee_shop} outlet
-                          </span>
-                        ) : (
-                          <span className="text-stone-400">0</span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedGrid(grid);
-                          }}
-                          className="text-blue-600 hover:text-blue-700 font-bold inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          Audit <ChevronRight size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-stone-400 font-medium bg-stone-50/50 rounded-b-2xl">
-                    Tidak ada sampel grid yang terdaftar pada tab ini.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedGrid(grid);
+                    }}
+                    className={`w-full flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl text-xs font-bold transition-all active:scale-[0.98] cursor-pointer ${
+                      isSelected 
+                        ? "bg-[#1D3557] text-white shadow-sm" 
+                        : "bg-stone-50 text-stone-600 hover:bg-stone-100"
+                    }`}
+                  >
+                    <span>Audit Detail</span>
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Card>
     </AdminLayout>

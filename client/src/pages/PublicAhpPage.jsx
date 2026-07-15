@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -14,10 +14,12 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import Card from "../components/common/Card";
-import { criteria } from "../data/criteria";
-import { indicators } from "../data/indicators";
+import { criteria as fallbackCriteria } from "../data/criteria";
+import { indicators as fallbackIndicators } from "../data/indicators";
 import PublicLayout from "../layouts/PublicLayout";
 import { weightService } from "../services/weightService";
+import { kriteriaService } from "../services/api/kriteriaService";
+import { indikatorService } from "../services/api/indikatorService";
 import {
   calculateAhpFromComparisons,
   createEqualComparisons,
@@ -39,24 +41,24 @@ const preferenceOptions = [
   { value: "right", label: "Pilihan B lebih penting" },
 ];
 
-function getIndicatorsByCriteria(criteriaCode) {
-  return indicators.filter(
+function getIndicatorsByCriteria(criteriaCode, indicatorItems) {
+  return indicatorItems.filter(
     (indicator) => indicator.criteriaCode === criteriaCode
   );
 }
 
-function buildInitialIndicatorComparisons() {
+function buildInitialIndicatorComparisons(criteriaItems, indicatorItems) {
   return Object.fromEntries(
-    criteria.map((criterion) => {
-      const items = getIndicatorsByCriteria(criterion.code);
+    criteriaItems.map((criterion) => {
+      const items = getIndicatorsByCriteria(criterion.code, indicatorItems);
       return [criterion.code, createEqualComparisons(generatePairs(items))];
     })
   );
 }
 
-function buildIndicatorQuestionList() {
-  return criteria.flatMap((criterion) => {
-    const items = getIndicatorsByCriteria(criterion.code);
+function buildIndicatorQuestionList(criteriaItems, indicatorItems) {
+  return criteriaItems.flatMap((criterion) => {
+    const items = getIndicatorsByCriteria(criterion.code, indicatorItems);
 
     return generatePairs(items).map((pair) => ({
       ...pair,
@@ -64,6 +66,41 @@ function buildIndicatorQuestionList() {
       criteriaName: criterion.name,
     }));
   });
+}
+
+function getArrayData(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;
+  return [];
+}
+
+function mapKriteriaItem(item) {
+  const id = item.id_kriteria ?? item.id;
+  return {
+    id,
+    code: String(id),
+    name: item.nama_kriteria ?? item.nama ?? "-",
+    description: item.deskripsi ?? item.keterangan ?? "",
+    urutan: item.urutan ?? 999,
+  };
+}
+
+function mapIndikatorItem(item) {
+  const id = item.id_indikator ?? item.id;
+  const idKriteria =
+    item.id_kriteria ??
+    item.kriteria?.id_kriteria ??
+    item.kriteria?.id ??
+    item.criteriaId;
+  return {
+    id,
+    code: String(id),
+    criteriaCode: String(idKriteria),
+    criteriaId: idKriteria,
+    name: item.nama_indikator ?? item.nama ?? "-",
+    description: item.keterangan ?? item.deskripsi ?? "",
+    urutan: item.urutan ?? 999,
+  };
 }
 
 function formatPercent(value, digit = 2) {
@@ -106,7 +143,7 @@ function PublicAhpStepper({ activeStep }) {
   );
 }
 
-function PublicIntroCard({ onStart, onOpenMap }) {
+function PublicIntroCard({ onStart, onOpenMap, criteriaCount }) {
   return (
     <Card className="p-8 border border-stone-200/60 shadow-xs rounded-3xl bg-white w-full">
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
@@ -134,7 +171,7 @@ function PublicIntroCard({ onStart, onOpenMap }) {
 
         <div className="rounded-2xl bg-stone-50 p-4 text-center border border-stone-100">
           <p className="text-2xl font-black text-[#1D3557]">
-            {criteria.length}
+            {criteriaCount}
           </p>
           <p className="text-xs text-stone-500">Kriteria Utama</p>
         </div>
@@ -494,68 +531,91 @@ function PublicWeightResult({
   criteriaWeights = {},
   localIndicatorWeights = {},
   globalIndicatorWeights = {},
+  criteriaList = [],
+  indicatorsList = [],
 }) {
-  const sortedIndicators = [...indicators].sort(
+  const sortedGlobalIndicators = [...indicatorsList].sort(
     (a, b) =>
       Number(globalIndicatorWeights[b.code] || 0) -
       Number(globalIndicatorWeights[a.code] || 0)
   );
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-      <Card className="p-5 border border-stone-200/60 shadow-xs rounded-3xl bg-white">
-        <div className="flex items-center gap-3">
-          <span className="rounded-2xl bg-blue-50 p-3 text-[#577590] border border-blue-100/50">
+    <div className="grid gap-6 lg:grid-cols-3">
+      {/* 1. Card Bobot Kriteria */}
+      <Card className="p-5 border border-stone-200/60 shadow-sm rounded-3xl bg-white flex flex-col">
+        <div className="flex items-center gap-3 border-b border-stone-100 pb-3">
+          <span className="rounded-2xl bg-blue-50 p-2 text-[#577590] border border-blue-100/50">
             <BarChart3 size={18} />
           </span>
-
           <div>
-            <h3 className="font-extrabold text-[#1D3557]">Bobot Kriteria</h3>
-            <p className="text-sm text-stone-500">
-              Hasil dari perbandingan antar kriteria.
-            </p>
+            <h3 className="font-extrabold text-[#1D3557] text-sm">Bobot Kriteria</h3>
+            <p className="text-[10px] text-stone-400">Prioritas antar kriteria utama</p>
           </div>
         </div>
-
-        <div className="mt-4 space-y-4">
-          {criteria.map((criterion) => (
+        <div className="mt-4 space-y-4 flex-1">
+          {criteriaList.map((criterion) => (
             <WeightBar
               key={criterion.code}
               label={criterion.name}
               value={criteriaWeights[criterion.code]}
-              helper={criterion.shortName}
+              helper={criterion.shortName || criterion.name}
             />
           ))}
         </div>
       </Card>
 
-      <Card className="p-5 border border-stone-200/60 shadow-xs rounded-3xl bg-white">
-        <div className="flex items-center gap-3">
-          <span className="rounded-2xl bg-blue-50 p-3 text-[#577590] border border-blue-100/50">
+      {/* 2. Card Bobot Lokal per Indikator */}
+      <Card className="p-5 border border-stone-200/60 shadow-sm rounded-3xl bg-white flex flex-col">
+        <div className="flex items-center gap-3 border-b border-stone-100 pb-3">
+          <span className="rounded-2xl bg-indigo-50 p-2 text-indigo-700 border border-indigo-100/50">
             <BarChart3 size={18} />
           </span>
-
           <div>
-            <h3 className="font-extrabold text-[#1D3557]">
-              Bobot Akhir Indikator
-            </h3>
-            <p className="text-sm text-stone-500">
-              Bobot akhir = bobot kriteria × bobot lokal indikator.
-            </p>
+            <h3 className="font-extrabold text-[#1D3557] text-sm">Bobot Lokal Indikator</h3>
+            <p className="text-[10px] text-stone-400">Kontribusi indikator dalam kriteria induk</p>
           </div>
         </div>
+        <div className="mt-4 space-y-5 flex-1 max-h-[60vh] overflow-y-auto pr-1">
+          {criteriaList.map((criterion) => {
+            const groupInds = indicatorsList.filter(ind => ind.criteriaCode === criterion.code);
+            return (
+              <div key={criterion.code} className="space-y-2 border-b border-stone-50 pb-3 last:border-0 last:pb-0">
+                <span className="text-[9px] uppercase font-bold text-stone-450 tracking-wider">
+                  {criterion.name}
+                </span>
+                <div className="space-y-2">
+                  {groupInds.map(ind => (
+                    <WeightBar
+                      key={ind.code}
+                      label={ind.name}
+                      value={localIndicatorWeights[criterion.code]?.[ind.code] || 0}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
 
-        <div className="mt-4 space-y-4">
-          {sortedIndicators.map((indicator) => (
+      {/* 3. Card Bobot Total Indikator */}
+      <Card className="p-5 border border-stone-200/60 shadow-sm rounded-3xl bg-white flex flex-col">
+        <div className="flex items-center gap-3 border-b border-stone-100 pb-3">
+          <span className="rounded-2xl bg-emerald-50 p-2 text-emerald-700 border border-emerald-100/50">
+            <BarChart3 size={18} />
+          </span>
+          <div>
+            <h3 className="font-extrabold text-[#1D3557] text-sm">Bobot Total Indikator</h3>
+            <p className="text-[10px] text-stone-400">Bobot global akhir (Kriteria × Lokal)</p>
+          </div>
+        </div>
+        <div className="mt-4 space-y-4 flex-1 max-h-[60vh] overflow-y-auto pr-1">
+          {sortedGlobalIndicators.map((indicator) => (
             <WeightBar
               key={indicator.code}
               label={indicator.name}
               value={globalIndicatorWeights[indicator.code]}
-              helper={`Lokal: ${formatPercent(
-                localIndicatorWeights[indicator.criteriaCode]?.[
-                indicator.code
-                ] || 0
-              )}`}
             />
           ))}
         </div>
@@ -567,43 +627,71 @@ function PublicWeightResult({
 export default function PublicAhpPage() {
   const navigate = useNavigate();
 
-  const criteriaPairs = useMemo(() => generatePairs(criteria), []);
-  const indicatorQuestions = useMemo(() => buildIndicatorQuestionList(), []);
+  const [kriteriaItems, setKriteriaItems] = useState([]);
+  const [indikatorItems, setIndikatorItems] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [activeStep, setActiveStep] = useState(0);
   const [criteriaIndex, setCriteriaIndex] = useState(0);
   const [indicatorIndex, setIndicatorIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [criteriaComparisons, setCriteriaComparisons] = useState(() =>
-    createEqualComparisons(criteriaPairs)
-  );
+  const [criteriaComparisons, setCriteriaComparisons] = useState({});
+  const [indicatorComparisons, setIndicatorComparisons] = useState({});
 
-  const [indicatorComparisons, setIndicatorComparisons] = useState(() =>
-    buildInitialIndicatorComparisons()
-  );
+  useEffect(() => {
+    Promise.all([kriteriaService.getAll(), indikatorService.getAll()])
+      .then(([kriteriaData, indikatorData]) => {
+        const mappedKriteria = getArrayData(kriteriaData)
+          .map(mapKriteriaItem)
+          .filter((item) => item.id !== 6 && item.code !== "6")
+          .sort((a, b) => a.urutan - b.urutan);
+
+        const mappedIndikator = getArrayData(indikatorData)
+          .map(mapIndikatorItem)
+          .filter((item) => item.criteriaId !== 6 && item.criteriaCode !== "6")
+          .sort((a, b) => a.urutan - b.urutan);
+
+        setKriteriaItems(mappedKriteria);
+        setIndikatorItems(mappedIndikator);
+
+        const pairs = generatePairs(mappedKriteria);
+        setCriteriaComparisons(createEqualComparisons(pairs));
+        setIndicatorComparisons(
+          buildInitialIndicatorComparisons(mappedKriteria, mappedIndikator)
+        );
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Gagal memuat data AHP:", err);
+        setLoading(false);
+      });
+  }, []);
+
+  const criteriaPairs = useMemo(() => generatePairs(kriteriaItems), [kriteriaItems]);
+  const indicatorQuestions = useMemo(() => buildIndicatorQuestionList(kriteriaItems, indikatorItems), [kriteriaItems, indikatorItems]);
 
   const criteriaResult = useMemo(
-    () => calculateAhpFromComparisons(criteria, criteriaComparisons),
-    [criteriaComparisons]
+    () => calculateAhpFromComparisons(kriteriaItems, criteriaComparisons),
+    [kriteriaItems, criteriaComparisons]
   );
 
   const localResults = useMemo(
     () =>
       Object.fromEntries(
-        criteria.map((criterion) => {
-          const items = getIndicatorsByCriteria(criterion.code);
+        kriteriaItems.map((criterion) => {
+          const items = getIndicatorsByCriteria(criterion.code, indikatorItems);
 
           return [
             criterion.code,
             calculateAhpFromComparisons(
               items,
-              indicatorComparisons[criterion.code]
+              indicatorComparisons[criterion.code] || {}
             ),
           ];
         })
       ),
-    [indicatorComparisons]
+    [kriteriaItems, indikatorItems, indicatorComparisons]
   );
 
   const localIndicatorWeights = useMemo(
@@ -693,7 +781,7 @@ export default function PublicAhpPage() {
 
   function resetForm() {
     setCriteriaComparisons(createEqualComparisons(criteriaPairs));
-    setIndicatorComparisons(buildInitialIndicatorComparisons());
+    setIndicatorComparisons(buildInitialIndicatorComparisons(kriteriaItems, indikatorItems));
     setCriteriaIndex(0);
     setIndicatorIndex(0);
     setActiveStep(0);
@@ -705,6 +793,8 @@ export default function PublicAhpPage() {
     const result = await weightService.saveCustomAhpWeights({
       criteriaComparisons,
       indicatorComparisons,
+      kriteriaItems,
+      indikatorItems
     });
 
     setIsSaving(false);
@@ -713,6 +803,23 @@ export default function PublicAhpPage() {
       navigate("/peta-rekomendasi");
     }
   }
+
+  if (loading) {
+    return (
+      <PublicLayout>
+        <div className="flex min-h-[70vh] flex-col items-center justify-center gap-4 text-stone-500">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-stone-300 border-t-[#1D3557]"></div>
+          <p className="font-semibold text-sm">Memuat kriteria & indikator...</p>
+        </div>
+      </PublicLayout>
+    );
+  }
+
+  const sortedIndicators = [...indikatorItems].sort(
+    (a, b) =>
+      Number(globalIndicatorWeights[b.code] || 0) -
+      Number(globalIndicatorWeights[a.code] || 0)
+  );
 
   return (
     <PublicLayout>
@@ -741,14 +848,14 @@ export default function PublicAhpPage() {
               <div className="flex flex-wrap gap-4">
                 <div className="rounded-2xl bg-stone-50 p-4 text-center border border-stone-100">
                   <p className="text-2xl font-black text-[#1D3557]">
-                    {criteria.length}
+                    {kriteriaItems.length}
                   </p>
                   <p className="text-xs text-stone-500">Kriteria</p>
                 </div>
 
                 <div className="rounded-2xl bg-stone-50 p-4 text-center border border-stone-100">
                   <p className="text-2xl font-black text-[#1D3557]">
-                    {indicators.length}
+                    {indikatorItems.length}
                   </p>
                   <p className="text-xs text-stone-500">Indikator</p>
                 </div>
@@ -778,6 +885,7 @@ export default function PublicAhpPage() {
                 <PublicIntroCard
                   onStart={() => setActiveStep(1)}
                   onOpenMap={() => navigate("/peta-rekomendasi")}
+                  criteriaCount={kriteriaItems.length}
                 />
               )}
 
@@ -963,28 +1071,32 @@ export default function PublicAhpPage() {
                     criteriaWeights={criteriaResult.weightsPercent}
                     localIndicatorWeights={localIndicatorWeights}
                     globalIndicatorWeights={globalIndicatorWeights}
+                    criteriaList={kriteriaItems}
+                    indicatorsList={indikatorItems}
                   />
-
-                  <div className="flex flex-wrap justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setActiveStep(2)}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 py-3 text-xs font-bold text-stone-600 transition hover:bg-stone-50 active:scale-95 cursor-pointer uppercase tracking-wider"
-                    >
-                      <ArrowLeft size={16} />
-                      Kembali ke Indikator
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => navigate("/peta-rekomendasi")}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 py-3 text-xs font-bold text-stone-600 transition hover:bg-stone-50 active:scale-95 cursor-pointer uppercase tracking-wider"
-                    >
-                      <Map size={16} />
-                      Buka Peta Tanpa Menyimpan
-                    </button>
-                  </div>
                 </>
+              )}
+
+              {activeStep === 3 && (
+                <div className="flex flex-wrap justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setActiveStep(2)}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 py-3 text-xs font-bold text-stone-600 transition hover:bg-stone-50 active:scale-95 cursor-pointer uppercase tracking-wider"
+                  >
+                    <ArrowLeft size={16} />
+                    Kembali ke Indikator
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate("/peta-rekomendasi")}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 py-3 text-xs font-bold text-stone-600 transition hover:bg-stone-50 active:scale-95 cursor-pointer uppercase tracking-wider"
+                  >
+                    <Map size={16} />
+                    Buka Peta Tanpa Menyimpan
+                  </button>
+                </div>
               )}
             </div>
 
@@ -998,20 +1110,20 @@ export default function PublicAhpPage() {
 
               <Card className="p-5 border border-stone-200/60 shadow-xs rounded-3xl bg-white">
                 <h3 className="font-extrabold text-[#1D3557]">
-                  Konsistensi Indikator
+                  Konsistensi Kriteria Lokal
                 </h3>
 
                 <div className="mt-3 space-y-2">
-                  {criteria.map((criterion) => {
-                    const result = localResults[criterion.code];
+                  {kriteriaItems.map((criterion) => {
+                    const result = localResults[criterion.code] || { isConsistent: true, cr: 0 };
 
                     return (
                       <div
                         key={criterion.code}
                         className="flex items-center justify-between gap-3 rounded-2xl bg-stone-50 px-3 py-2"
                       >
-                        <span className="text-sm font-semibold text-stone-700">
-                          {criterion.shortName}
+                        <span className="text-sm font-semibold text-stone-700 font-bold">
+                          {criterion.name}
                         </span>
 
                         <span

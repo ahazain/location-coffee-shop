@@ -1,7 +1,9 @@
 const path = require("path");
 const fs = require("fs");
 const prisma = require("../prisma/prisma-client");
+const crypto = require("crypto");
 const GeotiffHelper = require("../helpers/geotiff-helper");
+const { TipeRaster } = require("@prisma/client");
 const RasterDbUtil = require("../utils/raster-db-util");
 const {
   BadRequestError,
@@ -9,10 +11,6 @@ const {
 } = require("../utils/error-handling-util");
 
 class GeotiffService {
-  // ─────────────────────────────────────────────
-  // Upload Raw GeoTIFF
-  // ─────────────────────────────────────────────
-
   static async uploadIndikatorRaw({ id_indikator, file }) {
     if (!file) {
       throw new BadRequestError("File GeoTIFF wajib diunggah.");
@@ -20,7 +18,10 @@ class GeotiffService {
 
     GeotiffHelper.validateExtension(file);
 
-    const parsedIdIndikator = RasterDbUtil.parseId(id_indikator, "ID indikator");
+    const parsedIdIndikator = RasterDbUtil.parseId(
+      id_indikator,
+      "ID indikator",
+    );
 
     const metadata = await GeotiffHelper.readMetadata(file.path);
     const storedPath = RasterDbUtil.normalizeStoredPath(file.path);
@@ -43,7 +44,7 @@ class GeotiffService {
         throw new NotFoundError("Indikator tidak ditemukan.");
       }
 
-      const tipeRaster = "raw";
+      const tipeRaster = TipeRaster.RAW;
 
       // LANGKAH 2: Cari dan hapus DB record raster lama dengan tipe yang sama
       oldFilePathToDelete = await RasterDbUtil.deleteExistingRaster(tx, {
@@ -51,11 +52,46 @@ class GeotiffService {
         tipe_raster: tipeRaster,
       });
 
+      // Cari dan hapus juga FUZZY raster layer terkait indikator ini
+      const fuzzyRaster = await tx.rasterLayer.findFirst({
+        where: {
+          id_indikator: parsedIdIndikator,
+          tipe_raster: TipeRaster.FUZZY,
+        },
+      });
+
+      let oldFuzzyFilePath = null;
+      if (fuzzyRaster) {
+        await tx.rasterLayer.delete({
+          where: { id_raster_layer: fuzzyRaster.id_raster_layer },
+        });
+        oldFuzzyFilePath = fuzzyRaster.file_path;
+      }
+
+      // Bersihkan hasil WLC lama dan raster FINAL_SCORE karena data input berubah
+      await tx.hasilWlc.deleteMany({});
+      
+      const finalScoreRasters = await tx.rasterLayer.findMany({
+        where: { tipe_raster: TipeRaster.FINAL_SCORE }
+      });
+      const finalScoreFilePaths = [];
+      for (const fsr of finalScoreRasters) {
+        await tx.rasterLayer.delete({
+          where: { id_raster_layer: fsr.id_raster_layer }
+        });
+        finalScoreFilePaths.push(fsr.file_path);
+      }
+
+      //inisiasi name kode layer
+      const randomSuffix = crypto.randomBytes(4).toString("hex"); // hasilkan 8 karakter hex
+      const kodeLayer = `${tipeRaster}-IND${parsedIdIndikator}-${randomSuffix}`;
+
       // LANGKAH 3: Masukkan data metadata GeoTIFF baru yang diunggah ke database
       const rasterLayer = await tx.rasterLayer.create({
         data: {
           id_indikator: parsedIdIndikator,
           tipe_raster: tipeRaster,
+          kode_layer: kodeLayer,
           file_path: storedPath,
           crs: metadata.crs,
           min_value: metadata.min_value,
@@ -69,6 +105,7 @@ class GeotiffService {
       return {
         id_raster_layer: rasterLayer.id_raster_layer,
         id_indikator: indikator.id_indikator,
+        kode_layer: rasterLayer.kode_layer,
         kode_indikator: String(indikator.id_indikator),
         nama_indikator: indikator.nama_indikator,
         tipe_raster: rasterLayer.tipe_raster,
@@ -80,6 +117,8 @@ class GeotiffService {
           mean_value: rasterLayer.mean_value,
           nodata_value: rasterLayer.nodata_value,
         },
+        oldFuzzyFilePath,
+        finalScoreFilePaths,
       };
     });
 
@@ -93,7 +132,41 @@ class GeotiffService {
         try {
           fs.unlinkSync(absolutePath);
         } catch (err) {
-          console.warn(`  [WARNING] Gagal menghapus berkas fisik lama ${oldFilePathToDelete}: ${err.message}`);
+          console.warn(
+            `  [WARNING] Gagal menghapus berkas fisik lama ${oldFilePathToDelete}: ${err.message}`,
+          );
+        }
+      }
+    }
+
+    if (result.oldFuzzyFilePath) {
+      const fuzzyAbsPath = path.isAbsolute(result.oldFuzzyFilePath)
+        ? result.oldFuzzyFilePath
+        : path.join(process.cwd(), result.oldFuzzyFilePath);
+      if (fs.existsSync(fuzzyAbsPath)) {
+        try {
+          fs.unlinkSync(fuzzyAbsPath);
+        } catch (err) {
+          console.warn(
+            `  [WARNING] Gagal menghapus berkas fuzzy lama ${result.oldFuzzyFilePath}: ${err.message}`,
+          );
+        }
+      }
+    }
+
+    if (result.finalScoreFilePaths && result.finalScoreFilePaths.length > 0) {
+      for (const filePath of result.finalScoreFilePaths) {
+        const absPath = path.isAbsolute(filePath)
+          ? filePath
+          : path.join(process.cwd(), filePath);
+        if (fs.existsSync(absPath)) {
+          try {
+            fs.unlinkSync(absPath);
+          } catch (err) {
+            console.warn(
+              `  [WARNING] Gagal menghapus berkas final score lama ${filePath}: ${err.message}`,
+            );
+          }
         }
       }
     }
@@ -188,10 +261,67 @@ class GeotiffService {
       throw new NotFoundError("Raster layer tidak ditemukan.");
     }
 
+    let fuzzyDeleted = false;
+    let oldWlcDeleted = false;
+
     // Hapus dari DB terlebih dahulu
     await prisma.rasterLayer.delete({
       where: { id_raster_layer: parsedId },
     });
+
+    // Jika yang dihapus adalah RAW dataset, hapus juga FUZZY raster layer dan hasil WLC
+    if (raster.tipe_raster === "RAW" && raster.id_indikator) {
+      const fuzzyRaster = await prisma.rasterLayer.findFirst({
+        where: {
+          id_indikator: raster.id_indikator,
+          tipe_raster: "FUZZY",
+        },
+      });
+
+      if (fuzzyRaster) {
+        await prisma.rasterLayer.delete({
+          where: { id_raster_layer: fuzzyRaster.id_raster_layer },
+        });
+        fuzzyDeleted = true;
+
+        const fuzzyAbsPath = path.isAbsolute(fuzzyRaster.file_path)
+          ? fuzzyRaster.file_path
+          : path.join(process.cwd(), fuzzyRaster.file_path);
+
+        if (fs.existsSync(fuzzyAbsPath)) {
+          try {
+            fs.unlinkSync(fuzzyAbsPath);
+          } catch (err) {
+            console.warn(
+              `  [WARNING] Gagal menghapus file fuzzy ${fuzzyRaster.file_path}: ${err.message}`,
+            );
+          }
+        }
+      }
+
+      // Bersihkan hasil WLC lama karena data tidak lagi lengkap
+      await prisma.hasilWlc.deleteMany({});
+      
+      const finalScoreRasters = await prisma.rasterLayer.findMany({
+        where: { tipe_raster: "FINAL_SCORE" }
+      });
+      for (const fsr of finalScoreRasters) {
+        await prisma.rasterLayer.delete({
+          where: { id_raster_layer: fsr.id_raster_layer }
+        });
+        const fsrAbsPath = path.isAbsolute(fsr.file_path)
+          ? fsr.file_path
+          : path.join(process.cwd(), fsr.file_path);
+        if (fs.existsSync(fsrAbsPath)) {
+          try {
+            fs.unlinkSync(fsrAbsPath);
+          } catch (err) {
+            console.warn(`  [WARNING] Gagal menghapus file final score ${fsr.file_path}: ${err.message}`);
+          }
+        }
+      }
+      oldWlcDeleted = true;
+    }
 
     // Hapus file dari storage (best-effort, tidak gagal jika file tidak ada)
     const absolutePath = path.isAbsolute(raster.file_path)
@@ -202,7 +332,9 @@ class GeotiffService {
       try {
         fs.unlinkSync(absolutePath);
       } catch (err) {
-        console.warn(`  [WARNING] Gagal menghapus file ${raster.file_path}: ${err.message}`);
+        console.warn(
+          `  [WARNING] Gagal menghapus file ${raster.file_path}: ${err.message}`,
+        );
       }
     }
 
@@ -211,6 +343,8 @@ class GeotiffService {
       tipe_raster: raster.tipe_raster,
       file_path: raster.file_path,
       deleted: true,
+      fuzzyDeleted,
+      oldWlcDeleted,
     };
   }
 }

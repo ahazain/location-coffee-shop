@@ -3,13 +3,14 @@ import { BarChart3, BrainCircuit, Calculator, MapPinned, Settings, Sigma, Menu, 
 import { cn } from "../../utils/className";
 
 const navItems = [
-  { label: "Dataset", to: "/admin/datasets", icon: UploadCloud },
   { label: "Kriteria", to: "/admin/kriteria", icon: ListTree },
   { label: "Indikator", to: "/admin/indicators", icon: BarChart3 },
+  { label: "Dataset", to: "/admin/datasets", icon: UploadCloud },
   { label: "Proses Fuzzy", to: "/admin/fuzzy", icon: Sigma },
   { label: "AHP Responden", to: "/admin/ahp", icon: BrainCircuit },
   { label: "Hitung WLC", to: "/admin/wlc", icon: Calculator },
   { label: "Preview & Publish", to: "/admin/map-preview", icon: MapPinned },
+  { label: "Peta 10 Terbaik", to: "/admin/top-10-map", icon: MapPinned },
   { label: "Validasi Spasial", to: "/admin/validation", icon: CheckSquare },
 ];
 
@@ -18,9 +19,9 @@ export default function AdminSidebar({ isCollapsed, onToggleSidebar }) {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    // sesuaikan dengan logic auth kamu, misalnya clear token/session
-    localStorage.removeItem("token");
-    navigate("/login");
+    localStorage.removeItem("admin_token");
+    localStorage.removeItem("admin_profile");
+    navigate("/admin/login");
   };
 
   return (

@@ -95,18 +95,22 @@ export default function AdminMapPreviewPage() {
         <aside className="space-y-4">
           <Card className="p-4">
             <h3 className="font-bold text-stone-950">Ringkasan peta</h3>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div className="mt-4 grid grid-cols-2 gap-2 text-center">
               <div className="rounded-2xl bg-stone-50 p-3">
                 <p className="text-lg font-black text-stone-950">{geojson?.summary?.total ?? "-"}</p>
-                <p className="text-xs text-stone-500">Grid</p>
+                <p className="text-xs text-stone-500">Total Grid</p>
               </div>
               <div className="rounded-2xl bg-stone-50 p-3">
-                <p className="text-lg font-black text-stone-950">{geojson?.summary?.recommended ?? "-"}</p>
-                <p className="text-xs text-stone-500">Rekom.</p>
+                <p className="text-lg font-black text-stone-950">{geojson?.summary?.sesuai ?? "-"}</p>
+                <p className="text-xs text-stone-500">Sesuai</p>
               </div>
               <div className="rounded-2xl bg-stone-50 p-3">
-                <p className="text-lg font-black text-stone-950">{geojson?.summary?.averageScore ?? "-"}</p>
-                <p className="text-xs text-stone-500">Rata-rata</p>
+                <p className="text-lg font-black text-stone-950">{geojson?.summary?.cukupSesuai ?? "-"}</p>
+                <p className="text-xs text-stone-500">Cukup Sesuai</p>
+              </div>
+              <div className="rounded-2xl bg-stone-50 p-3">
+                <p className="text-lg font-black text-stone-950">{geojson?.summary?.kurangSesuai ?? "-"}</p>
+                <p className="text-xs text-stone-500">Kurang Sesuai</p>
               </div>
             </div>
           </Card>

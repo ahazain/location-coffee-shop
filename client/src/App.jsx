@@ -12,6 +12,8 @@ import AdminWlcPage from "./pages/AdminWlcPage";
 import AdminMapPreviewPage from "./pages/AdminMapPreviewPage";
 import AdminKriteriaPage from "./pages/AdminKriteriaPage";
 import AdminValidationPage from "./pages/AdminValidationPage";
+import AdminTop10MapPage from "./pages/AdminTop10MapPage";
+import ProtectedRoute from "./components/common/ProtectedRoute";
 
 export default function App() {
   return (
@@ -24,16 +26,18 @@ export default function App() {
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin/register" element={<AdminRegisterPage />} />
 
-        <Route path="/admin" element={<Navigate to="/admin/datasets" replace />} />
-        <Route path="/admin/dashboard" element={<Navigate to="/admin/datasets" replace />} />
-        <Route path="/admin/kriteria" element={<AdminKriteriaPage />} />
-        <Route path="/admin/indicators" element={<AdminIndicatorsPage />} />
-        <Route path="/admin/datasets" element={<AdminDatasetsPage />} />
-        <Route path="/admin/fuzzy" element={<AdminFuzzyPage />} />
-        <Route path="/admin/ahp" element={<AdminAhpPage />} />
-        <Route path="/admin/wlc" element={<AdminWlcPage />} />
-        <Route path="/admin/map-preview" element={<AdminMapPreviewPage />} />
-        <Route path="/admin/validation" element={<AdminValidationPage />} />
+        {/* Protected Admin Routes */}
+        <Route path="/admin" element={<ProtectedRoute><Navigate to="/admin/datasets" replace /></ProtectedRoute>} />
+        <Route path="/admin/dashboard" element={<ProtectedRoute><Navigate to="/admin/datasets" replace /></ProtectedRoute>} />
+        <Route path="/admin/kriteria" element={<ProtectedRoute><AdminKriteriaPage /></ProtectedRoute>} />
+        <Route path="/admin/indicators" element={<ProtectedRoute><AdminIndicatorsPage /></ProtectedRoute>} />
+        <Route path="/admin/datasets" element={<ProtectedRoute><AdminDatasetsPage /></ProtectedRoute>} />
+        <Route path="/admin/fuzzy" element={<ProtectedRoute><AdminFuzzyPage /></ProtectedRoute>} />
+        <Route path="/admin/ahp" element={<ProtectedRoute><AdminAhpPage /></ProtectedRoute>} />
+        <Route path="/admin/wlc" element={<ProtectedRoute><AdminWlcPage /></ProtectedRoute>} />
+        <Route path="/admin/map-preview" element={<ProtectedRoute><AdminMapPreviewPage /></ProtectedRoute>} />
+        <Route path="/admin/top-10-map" element={<ProtectedRoute><AdminTop10MapPage /></ProtectedRoute>} />
+        <Route path="/admin/validation" element={<ProtectedRoute><AdminValidationPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

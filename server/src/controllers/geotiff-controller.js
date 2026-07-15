@@ -3,10 +3,6 @@ const GeotiffService = require("../services/geotiff-service");
 const ResponseHelper = require("../helpers/response-helper");
 
 class GeotiffController {
-  // ─────────────────────────────────────────────
-  // Upload Raw GeoTIFF
-  // ─────────────────────────────────────────────
-
   static async uploadIndikatorRaw(req, res) {
     let shouldDeleteUploadedFile = true;
 

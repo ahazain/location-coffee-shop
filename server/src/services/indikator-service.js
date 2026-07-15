@@ -31,6 +31,7 @@ class IndikatorService {
             nama_kriteria: indikator.kriteria.nama_kriteria,
           }
         : undefined,
+      raster_layers: indikator.raster_layers || [],
       created_at: indikator.created_at,
       updated_at: indikator.updated_at,
     };
@@ -79,6 +80,7 @@ class IndikatorService {
       },
       include: {
         kriteria: true,
+        raster_layers: true,
       },
     });
 
@@ -89,6 +91,7 @@ class IndikatorService {
     const data = await prisma.indikator.findMany({
       include: {
         kriteria: true,
+        raster_layers: true,
       },
       orderBy: [
         { id_kriteria: "asc" },
@@ -109,6 +112,7 @@ class IndikatorService {
       where: { id_indikator },
       include: {
         kriteria: true,
+        raster_layers: true,
       },
     });
 
@@ -128,6 +132,7 @@ class IndikatorService {
       },
       include: {
         kriteria: true,
+        raster_layers: true,
       },
       orderBy: [{ id_indikator: "asc" }],
     });
@@ -179,6 +184,7 @@ class IndikatorService {
       },
       include: {
         kriteria: true,
+        raster_layers: true,
       },
     });
 

@@ -96,13 +96,16 @@ function buildDefaultAhpAnalysis() {
   };
 }
 
-function buildCustomAhpAnalysis({ criteriaComparisons, indicatorComparisons }) {
-  const criteriaMatrix = matrixFromComparisons(criteria, criteriaComparisons);
-  const criteriaResult = calculateAhp(criteriaMatrix, criteria);
+function buildCustomAhpAnalysis({ criteriaComparisons, indicatorComparisons, kriteriaItems, indikatorItems }) {
+  const criteriaList = kriteriaItems || criteria;
+  const indicatorsList = indikatorItems || indicators;
+
+  const criteriaMatrix = matrixFromComparisons(criteriaList, criteriaComparisons);
+  const criteriaResult = calculateAhp(criteriaMatrix, criteriaList);
 
   const localResults = Object.fromEntries(
-    criteria.map((criterion) => {
-      const items = getIndicatorsByCriteria(criterion.code);
+    criteriaList.map((criterion) => {
+      const items = indicatorsList.filter((ind) => ind.criteriaCode === criterion.code);
       const matrix = matrixFromComparisons(items, indicatorComparisons?.[criterion.code] || {});
 
       return [criterion.code, calculateAhp(matrix, items)];
