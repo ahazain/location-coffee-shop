@@ -8,9 +8,11 @@ import Legend from "../components/map/Legend";
 import MapView from "../components/map/MapView";
 import AdminLayout from "../layouts/AdminLayout";
 import { adminService } from "../services/adminService";
+import { wlcService } from "../services/api/wlcService";
 
 export default function AdminMapPreviewPage() {
   const [geojson, setGeojson] = useState(null);
+  const [boundaryGeojson, setBoundaryGeojson] = useState(null);
   const [selectedGrid, setSelectedGrid] = useState(null);
   const [previewStatus, setPreviewStatus] = useState(null);
   const [publishStatus, setPublishStatus] = useState(null);
@@ -21,11 +23,12 @@ export default function AdminMapPreviewPage() {
   function loadPreview() {
     adminService.getMapPreview().then((data) => {
       setGeojson(data.map);
-      setSelectedGrid(data.map.summary.topGrid);
+      setSelectedGrid(data?.map?.summary?.topGrid || null);
       setPreviewStatus(data.previewStatus);
       setPublishStatus(data.publishStatus);
       setCanPublish(data.canPublish);
     });
+    wlcService.getBoundary().then(setBoundaryGeojson).catch(() => null);
   }
 
   useEffect(() => {
@@ -87,29 +90,36 @@ export default function AdminMapPreviewPage() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="h-[72vh] overflow-hidden rounded-3xl border border-stone-200 bg-white p-2 shadow-sm">
-          <MapView geojson={geojson} selectedGridCode={selectedGrid?.gridCode} onSelectGrid={setSelectedGrid} />
+          <MapView geojson={geojson} boundaryGeojson={boundaryGeojson} selectedGridCode={selectedGrid?.gridCode} onSelectGrid={setSelectedGrid} />
         </div>
         <aside className="space-y-4">
           <Card className="p-4">
             <h3 className="font-bold text-stone-950">Ringkasan peta</h3>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div className="mt-4 grid grid-cols-2 gap-2 text-center">
               <div className="rounded-2xl bg-stone-50 p-3">
-                <p className="text-lg font-black text-stone-950">{geojson?.summary.total ?? "-"}</p>
-                <p className="text-xs text-stone-500">Grid</p>
+                <p className="text-lg font-black text-stone-950">{geojson?.summary?.total ?? "-"}</p>
+                <p className="text-xs text-stone-500">Total Grid</p>
               </div>
               <div className="rounded-2xl bg-stone-50 p-3">
-                <p className="text-lg font-black text-stone-950">{geojson?.summary.recommended ?? "-"}</p>
-                <p className="text-xs text-stone-500">Rekom.</p>
+                <p className="text-lg font-black text-stone-950">{geojson?.summary?.sesuai ?? "-"}</p>
+                <p className="text-xs text-stone-500">Sesuai</p>
               </div>
               <div className="rounded-2xl bg-stone-50 p-3">
-                <p className="text-lg font-black text-stone-950">{geojson?.summary.averageScore ?? "-"}</p>
-                <p className="text-xs text-stone-500">Rata-rata</p>
+                <p className="text-lg font-black text-stone-950">{geojson?.summary?.cukupSesuai ?? "-"}</p>
+                <p className="text-xs text-stone-500">Cukup Sesuai</p>
+              </div>
+              <div className="rounded-2xl bg-stone-50 p-3">
+                <p className="text-lg font-black text-stone-950">{geojson?.summary?.kurangSesuai ?? "-"}</p>
+                <p className="text-xs text-stone-500">Kurang Sesuai</p>
               </div>
             </div>
           </Card>
           <Legend />
-          <GridDetailPanel selectedGrid={selectedGrid} />
         </aside>
+      </div>
+
+      <div className="mt-5">
+        <GridDetailPanel selectedGrid={selectedGrid} />
       </div>
     </AdminLayout>
   );

@@ -1,128 +1,213 @@
-import { useEffect, useState } from "react";
-import { CheckCircle2, Database, Info, RefreshCcw } from "lucide-react";
-import Badge from "../components/common/Badge";
-import Button from "../components/common/Button";
-import Card from "../components/common/Card";
-import DatasetTable from "../components/admin/DatasetTable";
-import LayerUploadForm from "../components/admin/LayerUploadForm";
+import { useEffect, useState, useRef } from "react";
 import AdminLayout from "../layouts/AdminLayout";
-import { adminService } from "../services/adminService";
+import LayerUploadForm from "../components/admin/LayerUploadForm";
+import DatasetTable from "../components/admin/DatasetTable";
+import Toast from "../components/common/Toast";
+import ConfirmationModal from "../components/common/ConfirmationModal";
+import { indikatorService } from "../services/api/indikatorService";
+import { geotiffService } from "../services/api/geotiffService";
+import { fuzzyService } from "../services/api/fuzzyService";
 
 export default function AdminDatasetsPage() {
-  const [data, setData] = useState(null);
+  const [indicators, setIndicators] = useState([]);
+  const [rastersMap, setRastersMap] = useState({});
+  const [rules, setRules] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
 
-  function loadData() {
-    adminService.getDatasets().then(setData);
-  }
+  // UI States
+  const [toast, setToast] = useState(null);
+  const [modalConfig, setModalConfig] = useState(null); // { isOpen, title, message, onConfirm, variant }
+
+  // Hidden upload handler for the table row "Update" button
+  const fileInputRef = useRef(null);
+  const [updateTargetId, setUpdateTargetId] = useState(null);
+  const [updateTargetName, setUpdateTargetName] = useState("");
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const list = await indikatorService.getAll();
+      setIndicators(list);
+
+      // Fetch fuzzy rules to retrieve midpoints
+      const allRules = await fuzzyService.getAllAturan();
+      setRules(allRules);
+
+      // Fetch all rasters for each indicator
+      const map = {};
+      await Promise.all(
+        list.map(async (ind) => {
+          try {
+            const data = await geotiffService.listByIndikator(ind.id);
+            map[ind.id] = data.rasters || [];
+          } catch (e) {
+            map[ind.id] = [];
+          }
+        })
+      );
+      setRastersMap(map);
+    } catch (err) {
+      setToast({ type: "error", message: `Gagal memuat data: ${err.message}` });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
   }, []);
 
-  async function handleUploadDataset(payload) {
-    const result = await adminService.uploadDataset(payload);
-    if (result.ok) loadData();
-    return result;
+  // Handle adding/replacing new raster from Form
+  async function handleAddDataset(idIndikator, file) {
+    const existingActive = rastersMap[idIndikator]?.some(r => r.tipe_raster === "raw" && r.is_active);
+    setIsUploading(true);
+    try {
+      if (existingActive) {
+        await geotiffService.updateRaw(idIndikator, file);
+      } else {
+        await geotiffService.uploadRaw(idIndikator, file);
+      }
+      setToast({ type: "success", message: "Successfully toasted! (Berkas GeoTIFF berhasil diunggah)" });
+      await loadData();
+    } catch (err) {
+      setToast({ type: "error", message: err.message || "Gagal mengunggah berkas." });
+      throw err;
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  // Handle clicking "Update" inside table row
+  function handleTableUpdateClick(idIndikator) {
+    const ind = indicators.find(i => i.id === idIndikator);
+    setUpdateTargetId(idIndikator);
+    setUpdateTargetName(ind ? ind.nama_indikator : "Indikator");
+
+    // Trigger hidden file selection dialog
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+      fileInputRef.current.click();
+    }
+  }
+
+  // File selected from the hidden input for table updates
+  function handleHiddenFileChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".tif") && !file.name.toLowerCase().endsWith(".tiff")) {
+      setToast({ type: "error", message: "Format file tidak didukung. Harap pilih file GeoTIFF (.tif/.tiff)." });
+      return;
+    }
+
+    // Show confirmation modal
+    setModalConfig({
+      isOpen: true,
+      title: "Konfirmasi Perbaruan GeoTIFF",
+      message: `Apakah Anda yakin ingin memperbarui berkas GeoTIFF untuk indikator "${updateTargetName}"? Berkas lama di database dan folder penyimpanan akan dihapus secara permanen.`,
+      variant: "warning",
+      onConfirm: () => executeTableUpdate(updateTargetId, file)
+    });
+  }
+
+  // Execute the PUT update after confirmation
+  async function executeTableUpdate(idIndikator, file) {
+    setModalConfig(null);
+    setLoading(true);
+    try {
+      await geotiffService.updateRaw(idIndikator, file);
+      setToast({ type: "success", message: "Successfully toasted! (File GeoTIFF berhasil diperbarui)" });
+      await loadData();
+    } catch (err) {
+      setToast({ type: "error", message: err.message || "Gagal memperbarui berkas GeoTIFF." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Handle clicking "Delete" inside table row
+  function handleTableDeleteClick(idRasterLayer, indicatorName) {
+    setModalConfig({
+      isOpen: true,
+      title: "Konfirmasi Hapus GeoTIFF",
+      message: `Apakah Anda yakin ingin menghapus berkas GeoTIFF untuk indikator "${indicatorName}"? Berkas di database dan penyimpanan akan dihapus secara permanen.`,
+      variant: "danger",
+      onConfirm: () => executeTableDelete(idRasterLayer)
+    });
+  }
+
+  // Execute DELETE after confirmation
+  async function executeTableDelete(idRasterLayer) {
+    setModalConfig(null);
+    setLoading(true);
+    try {
+      await geotiffService.deleteRaster(idRasterLayer);
+      setToast({ type: "success", message: "Successfully toasted! (File GeoTIFF berhasil dihapus)" });
+      await loadData();
+    } catch (err) {
+      setToast({ type: "error", message: err.message || "Gagal menghapus berkas GeoTIFF." });
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <AdminLayout>
-      <Card className="mb-5 p-5">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-          <div>
-            <Badge>Step 1 — Input dataset</Badge>
-            <h2 className="mt-3 text-2xl font-black text-stone-950">Upload data spasial yang sudah mengikuti grid</h2>
-            <p className="mt-2 max-w-4xl text-sm leading-6 text-stone-500">
-              Halaman ini dibuat sebagai pusat input dataset admin. Format yang diterima hanya GeoJSON karena data harus memiliki geometri spasial. Untuk titik kedai kopi existing, data baru ditambahkan ke layer kompetitor, bukan mengganti seluruh database.
-            </p>
-          </div>
-          <Button as="link" to="/admin/fuzzy" variant="secondary"><RefreshCcw size={16} /> Lanjut ke fuzzy</Button>
+      {/* Hidden file input for table update trigger */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept=".tif,.tiff"
+        className="hidden"
+        onChange={handleHiddenFileChange}
+      />
+
+      <div className="space-y-6">
+
+
+        {/* UPLOAD FORM (TOP) */}
+        <div className="w-full">
+          <LayerUploadForm
+            indicators={indicators}
+            rastersMap={rastersMap}
+            onUpload={handleAddDataset}
+            isUploadingExternal={isUploading}
+          />
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl bg-stone-50 p-4">
-            <p className="text-xs text-stone-500">Versi aktif</p>
-            <p className="mt-1 text-sm font-bold text-stone-950">{data?.datasetSummary.activeVersion || "-"}</p>
-          </div>
-          <div className="rounded-2xl bg-stone-50 p-4">
-            <p className="text-xs text-stone-500">Wilayah studi</p>
-            <p className="mt-1 text-sm font-bold text-stone-950">{data?.datasetSummary.areaStudy || "-"}</p>
-          </div>
-          <div className="rounded-2xl bg-stone-50 p-4">
-            <p className="text-xs text-stone-500">Ukuran grid</p>
-            <p className="mt-1 text-sm font-bold text-stone-950">{data?.datasetSummary.gridSize || "-"}</p>
-          </div>
-          <div className="rounded-2xl bg-stone-50 p-4">
-            <p className="text-xs text-stone-500">CRS analisis</p>
-            <p className="mt-1 text-sm font-bold text-stone-950">{data?.datasetSummary.coordinateSystem || "-"}</p>
-          </div>
+        {/* DATA TABLE (BOTTOM) */}
+        <div className="w-full">
+          <DatasetTable
+            indicators={indicators}
+            rastersMap={rastersMap}
+            loading={loading}
+            onDeleteRaster={handleTableDeleteClick}
+            onUpdateClick={handleTableUpdateClick}
+          />
         </div>
-      </Card>
+      </div>
 
-      <div className="mb-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <LayerUploadForm
-          layerOptions={data?.uploadLayerOptions || []}
-          checklist={data?.datasetValidationChecklist || []}
-          onUpload={handleUploadDataset}
+      {/* Confirmation Modal */}
+      {modalConfig && (
+        <ConfirmationModal
+          isOpen={modalConfig.isOpen}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          variant={modalConfig.variant}
+          onConfirm={modalConfig.onConfirm}
+          onCancel={() => setModalConfig(null)}
         />
+      )}
 
-        <div className="space-y-5">
-          <Card className="p-5">
-            <div className="flex items-center gap-2">
-              <Info size={18} className="text-amber-800" />
-              <h2 className="font-bold text-stone-950">Log proses admin</h2>
-            </div>
-            <div className="mt-4 space-y-3">
-              {(data?.processingLogs || []).map((item) => (
-                <div key={item.id} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-stone-900">{item.title}</p>
-                      <p className="mt-1 text-xs text-stone-500">{item.time}</p>
-                    </div>
-                    <CheckCircle2 size={18} className="text-green-700" />
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-stone-500">{item.detail}</p>
-                  <Badge variant="green" className="mt-3">{item.status}</Badge>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <span className="inline-flex rounded-2xl bg-amber-100 p-3 text-amber-800"><Database /></span>
-            <h3 className="mt-4 font-bold text-stone-950">Kenapa upload tidak langsung mengganti semua?</h3>
-            <p className="mt-2 text-sm leading-6 text-stone-500">
-              Karena beberapa data bersifat bertambah, misalnya titik kedai kopi existing. Jika ada 3 kedai baru, sistem cukup menambahkan 3 titik itu ke layer kompetitor, lalu hanya indikator persaingan yang ditandai perlu fuzzy ulang. Dataset lain yang tidak berubah tetap digunakan.
-            </p>
-          </Card>
-        </div>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
-        <DatasetTable layers={data?.datasetLayers || []} />
-
-        <Card className="p-5">
-          <div className="flex items-center gap-2">
-            <Info size={18} className="text-amber-800" />
-            <h2 className="font-bold text-stone-950">Riwayat Upload</h2>
-          </div>
-          <div className="mt-4 space-y-3">
-            {(data?.uploadHistory || []).map((item) => (
-              <div key={item.id} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-stone-900">{item.fileName}</p>
-                    <p className="mt-1 text-xs text-stone-500">{item.uploadedAt} oleh {item.uploadedBy}</p>
-                  </div>
-                  <CheckCircle2 size={18} className="text-green-700" />
-                </div>
-                <Badge variant="green" className="mt-3">{item.status}</Badge>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </AdminLayout>
   );
 }

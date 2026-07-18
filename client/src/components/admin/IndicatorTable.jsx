@@ -1,49 +1,146 @@
+import { Fragment } from "react";
+import { Edit2, Trash2, Folder } from "lucide-react";
 import Badge from "../common/Badge";
 import Card from "../common/Card";
-import { criteria } from "../../data/criteria";
 
-function getCriteriaName(code) {
-  return criteria.find((item) => item.code === code)?.shortName || code;
+function formatTipeNilai(type) {
+  if (!type) return "-";
+  return type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
 }
 
-function fuzzyLabel(type) {
-  if (type === "increasing") return "Benefit";
-  if (type === "decreasing") return "Cost";
-  return "Optimum";
-}
+export default function IndicatorTable({ indicators, loading, onEdit, onDelete }) {
+  const indicatorsWithNumber = indicators.map((indicator, index) => ({
+    ...indicator,
+    rowNumber: index + 1,
+  }));
 
-export default function IndicatorTable({ indicators }) {
+  const groupedByKriteria = indicatorsWithNumber.reduce((acc, indicator) => {
+    const kId =
+      indicator.id_kriteria ||
+      indicator.kriteria?.id_kriteria ||
+      indicator.kriteria?.id ||
+      999;
+
+    const kName = indicator.kriteria?.nama_kriteria || "Lainnya";
+
+    if (!acc[kId]) {
+      acc[kId] = {
+        id: kId,
+        nama: kName,
+        items: [],
+      };
+    }
+
+    acc[kId].items.push(indicator);
+    return acc;
+  }, {});
+
+  const groups = Object.values(groupedByKriteria).sort((a, b) => a.id - b.id);
+
   return (
-    <Card className="overflow-hidden p-0">
-      <div className="border-b border-stone-200 p-5">
-        <h2 className="text-lg font-bold text-stone-950">Indikator Fuzzy</h2>
-        <p className="mt-1 text-sm text-stone-500">Indikator masih dummy untuk validasi tampilan halaman admin.</p>
-      </div>
-
+    <Card className="flex flex-col justify-between p-0 border border-stone-200/60 shadow-xs rounded-3xl bg-white w-full overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
+        <table className="w-full text-left text-xs whitespace-nowrap">
+          <thead className="bg-[#f8fafc]/50 border-b border-stone-100 text-[10px] font-bold uppercase tracking-wider text-stone-400">
             <tr>
-              <th className="px-5 py-3">Indikator</th>
-              <th className="px-5 py-3">Kriteria</th>
-              <th className="px-5 py-3">Satuan</th>
-              <th className="px-5 py-3">Fuzzy</th>
-              <th className="px-5 py-3">Arah Preferensi</th>
+              <th className="px-6 py-4 w-16 text-center">NO</th>
+              <th className="px-6 py-4">INDIKATOR</th>
+              <th className="px-6 py-4">TIPE NILAI</th>
+              <th className="px-6 py-4 w-24 text-right">AKSI</th>
             </tr>
           </thead>
+
           <tbody className="divide-y divide-stone-100">
-            {indicators.map((indicator) => (
-              <tr key={indicator.code} className="hover:bg-stone-50">
-                <td className="px-5 py-4">
-                  <p className="font-semibold text-stone-900">{indicator.name}</p>
-                  <p className="mt-1 text-xs text-stone-500">{indicator.code}</p>
+            {loading ? (
+              <tr>
+                <td
+                  colSpan="4"
+                  className="px-6 py-12 text-center text-xs font-semibold text-stone-400 bg-white"
+                >
+                  Loading data...
                 </td>
-                <td className="px-5 py-4 text-stone-600">{getCriteriaName(indicator.criteriaCode)}</td>
-                <td className="px-5 py-4 text-stone-600">{indicator.unit}</td>
-                <td className="px-5 py-4"><Badge variant="amber">{fuzzyLabel(indicator.fuzzyType)}</Badge></td>
-                <td className="px-5 py-4 text-stone-600">{indicator.direction}</td>
               </tr>
-            ))}
+            ) : indicators.length === 0 ? (
+              <tr>
+                <td
+                  colSpan="4"
+                  className="px-6 py-12 text-center text-xs font-semibold text-stone-400 bg-white"
+                >
+                  Tidak ada indikator yang sesuai kriteria pencarian.
+                </td>
+              </tr>
+            ) : (
+              groups.map((group) => (
+                <Fragment key={group.id}>
+                  <tr className="bg-amber-50/15">
+                    <td
+                      colSpan="4"
+                      className="px-6 py-3 text-xs font-bold text-amber-600 bg-amber-50/5 border-y border-stone-100/50"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Folder
+                           size={14}
+                           className="text-amber-500 fill-amber-100"
+                        />
+                        Kriteria: {group.nama}
+                      </span>
+                    </td>
+                  </tr>
+
+                  {group.items.map((indicator) => {
+                    const indicatorId = indicator.id_indikator || indicator.id;
+                    const noStr = String(indicator.rowNumber).padStart(2, "0");
+
+                    return (
+                      <tr
+                        key={indicatorId}
+                        className="hover:bg-stone-50/40 transition"
+                      >
+                        <td className="px-6 py-4 text-center font-semibold text-stone-400 font-mono">
+                          {noStr}
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <p className="font-extrabold text-[#1D3557] text-xs sm:text-sm">
+                            {indicator.nama_indikator}
+                          </p>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <Badge variant="amber">
+                            {formatTipeNilai(indicator.tipe_nilai)}
+                          </Badge>
+                        </td>
+
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end items-center gap-3.5">
+                            <button
+                              type="button"
+                              onClick={() => onEdit(indicator)}
+                              className="rounded-lg p-1.5 text-stone-400 hover:text-[#1D3557] hover:bg-stone-100 transition active:scale-90 cursor-pointer"
+                              title="Edit Indikator"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onDelete(indicatorId, indicator.nama_indikator)
+                              }
+                              className="rounded-lg p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 transition active:scale-90 cursor-pointer"
+                              title="Hapus Indikator"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </Fragment>
+              ))
+            )}
           </tbody>
         </table>
       </div>

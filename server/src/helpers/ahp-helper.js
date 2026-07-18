@@ -188,7 +188,7 @@ class AHPHelper {
       consistency_index: this.round(consistencyIndex),
       consistency_ratio: this.round(consistencyRatio),
       is_consistent: isConsistent,
-      status_konsistensi: isConsistent ? "Konsisten" : "Tidak Konsisten",
+      status_konsistensi: isConsistent ? "KONSISTEN" : "TIDAK_KONSISTEN",
     };
   }
 

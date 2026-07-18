@@ -37,7 +37,6 @@ export default function PublicLayout({ children }) {
                 {item.label}
               </NavLink>
             ))}
-            <Button as="link" to="/admin/login" className="px-4 py-2">Admin</Button>
           </nav>
 
           <div className="flex items-center gap-2 lg:hidden">

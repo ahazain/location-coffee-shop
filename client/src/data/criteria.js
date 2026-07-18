@@ -1,44 +1,37 @@
 export const criteria = [
   {
-    code: "aglomerasi_aktivitas",
-    name: "Aglomerasi aktivitas",
-    shortName: "Aglomerasi",
+    code: "1",
+    name: "Zona Fungsional Kota",
+    shortName: "Fungsional Kota",
     description:
-      "Keramaian aktivitas non-cafe di sekitar lokasi, terutama layanan makan non-cafe serta fasilitas olahraga dan rekreasi.",
+      "Menggambarkan fungsi pemanfaatan ruang kota untuk aktivitas ekonomi, hunian, maupun rekreasi.",
   },
   {
-    code: "hunian_pekerja",
-    name: "Kawasan hunian dan pekerja",
-    shortName: "Hunian & pekerja",
+    code: "2",
+    name: "Permintaan Pasar",
+    shortName: "Permintaan",
     description:
-      "Potensi pelanggan dari kawasan tempat tinggal, kantor, bank, jasa keuangan, dan bisnis di sekitar lokasi.",
+      "Menggambarkan potensi permintaan pasar berdasarkan keberadaan pusat belanja, kantor, dan fasilitas pendidikan.",
   },
   {
-    code: "aksesibilitas",
-    name: "Aksesibilitas",
+    code: "3",
+    name: "Kondisi Ekonomi",
+    shortName: "Kondisi Ekonomi",
+    description:
+      "Menggambarkan tingkat vitalitas ekonomi dan konsentrasi populasi di suatu wilayah.",
+  },
+  {
+    code: "4",
+    name: "Aksesibilitas Transportasi",
     shortName: "Aksesibilitas",
     description:
-      "Kemudahan lokasi dijangkau melalui jalan utama, simpul transportasi, dan jaringan persimpangan.",
+      "Menggambarkan kemudahan akses menuju lokasi berdasarkan infrastruktur jalan dan simpul transportasi.",
   },
   {
-    code: "pusat_aktivitas",
-    name: "Pusat aktivitas",
-    shortName: "Pusat aktivitas",
-    description:
-      "Kedekatan lokasi dengan pusat komersial, pusat layanan, kampus, dan fasilitas pendidikan yang menarik pergerakan pengunjung.",
-  },
-  {
-    code: "vitalitas_ekonomi_populasi",
-    name: "Vitalitas ekonomi dan populasi",
-    shortName: "Ekonomi & populasi",
-    description:
-      "Kekuatan potensi pasar berdasarkan intensitas aktivitas ekonomi dan jumlah penduduk di sekitar lokasi.",
-  },
-  {
-    code: "persaingan",
+    code: "5",
     name: "Persaingan",
     shortName: "Persaingan",
     description:
-      "Kondisi keberadaan coffee shop lain di sekitar lokasi yang dapat memengaruhi peluang usaha dan risiko kejenuhan pasar.",
+      "Menggambarkan tingkat kepadatan dan jarak kedai kopi pesaing di sekitar lokasi.",
   },
 ];

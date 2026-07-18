@@ -1,31 +1,52 @@
-import { Link, useLocation } from "react-router-dom";
-import { BarChart3, BrainCircuit, Calculator, LayoutDashboard, MapPinned, Settings, Sigma, Store, UploadCloud } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { BarChart3, BrainCircuit, Calculator, MapPinned, Settings, Sigma, Menu, UploadCloud, ListTree, LogOut, CheckSquare } from "lucide-react";
 import { cn } from "../../utils/className";
 
 const navItems = [
-  { label: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard },
-  { label: "Input Dataset", to: "/admin/datasets", icon: UploadCloud },
+  { label: "Kriteria", to: "/admin/kriteria", icon: ListTree },
   { label: "Indikator", to: "/admin/indicators", icon: BarChart3 },
+  { label: "Dataset", to: "/admin/datasets", icon: UploadCloud },
   { label: "Proses Fuzzy", to: "/admin/fuzzy", icon: Sigma },
   { label: "AHP Responden", to: "/admin/ahp", icon: BrainCircuit },
   { label: "Hitung WLC", to: "/admin/wlc", icon: Calculator },
   { label: "Preview & Publish", to: "/admin/map-preview", icon: MapPinned },
+  { label: "Peta 10 Terbaik", to: "/admin/top-10-map", icon: MapPinned },
+  { label: "Validasi Spasial", to: "/admin/validation", icon: CheckSquare },
 ];
 
-export default function AdminSidebar() {
+export default function AdminSidebar({ isCollapsed, onToggleSidebar }) {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem("admin_token");
+    localStorage.removeItem("admin_profile");
+    navigate("/admin/login");
+  };
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-r border-stone-200 bg-stone-950 px-4 py-5 text-white lg:block">
-      <Link to="/" className="flex items-center gap-3 rounded-3xl bg-white/10 p-3">
-        <span className="rounded-2xl bg-amber-700 p-2 text-white">
-          <Store size={22} />
-        </span>
-        <span>
-          <span className="block text-sm font-bold">Coffee Location</span>
-          <span className="block text-xs text-stone-300">Admin Analisis</span>
-        </span>
-      </Link>
+    <aside
+      className={cn(
+        "sticky top-0 hidden h-screen shrink-0 border-r border-stone-200/10 bg-[#1D3557] px-4 py-5 text-white lg:block transition-all duration-300",
+        isCollapsed ? "w-20" : "w-72"
+      )}
+    >
+      <div className="flex items-center gap-3 rounded-2xl bg-white/10 p-3 justify-center">
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          className="rounded-xl bg-[#577590] p-2 text-white shrink-0 hover:bg-[#6c8ca8] transition active:scale-95 cursor-pointer flex items-center justify-center shadow-xs"
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <Menu size={20} />
+        </button>
+        {!isCollapsed && (
+          <span className="animate-fadeIn">
+            <span className="block text-sm font-bold tracking-wide">Coffee Location</span>
+            <span className="block text-xs text-stone-300">Admin Analisis</span>
+          </span>
+        )}
+      </div>
 
       <nav className="mt-8 space-y-2">
         {navItems.map((item) => {
@@ -36,26 +57,34 @@ export default function AdminSidebar() {
             <Link
               key={item.to}
               to={item.to}
+              title={isCollapsed ? item.label : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
-                isActive ? "bg-amber-700 text-white" : "text-stone-300 hover:bg-white/10 hover:text-white",
+                "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition justify-center lg:justify-start",
+                isActive
+                  ? "bg-[#577590] text-white shadow-md border border-white/10"
+                  : "text-stone-300 hover:bg-white/5 hover:text-white"
               )}
             >
-              <Icon size={18} />
-              {item.label}
+              <Icon size={18} className="shrink-0" />
+              {!isCollapsed && <span className="animate-fadeIn">{item.label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      <div className="absolute bottom-5 left-4 right-4 rounded-3xl bg-white/10 p-4">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Settings size={16} />
-          Alur proposal
-        </div>
-        <p className="mt-2 text-xs leading-5 text-stone-300">
-          Input dataset → fuzzy ulang layer terdampak → AHP default/responden → WLC ulang → preview & publish.
-        </p>
+      <div className="absolute bottom-5 left-4 right-4">
+        <button
+          type="button"
+          onClick={handleLogout}
+          title={isCollapsed ? "Logout" : undefined}
+          className={cn(
+            "flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-stone-300 transition hover:bg-red-500/10 hover:text-red-400 cursor-pointer justify-center lg:justify-start",
+            "border border-white/10 bg-white/5"
+          )}
+        >
+          <LogOut size={18} className="shrink-0" />
+          {!isCollapsed && <span className="animate-fadeIn">Logout</span>}
+        </button>
       </div>
     </aside>
   );

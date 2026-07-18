@@ -1,44 +1,57 @@
-import { Link, useLocation } from "react-router-dom";
-import { LogOut, Map } from "lucide-react";
-import Button from "../common/Button";
+import { useLocation } from "react-router-dom";
 
-const titleByPath = {
-  "/admin/dashboard": "Dashboard Admin",
-  "/admin/indicators": "Kelola Indikator",
-  "/admin/datasets": "Kelola Dataset",
-  "/admin/fuzzy": "Normalisasi Fuzzy Otomatis",
-  "/admin/ahp": "Pembobotan AHP Default",
-  "/admin/wlc": "Perhitungan WLC",
-  "/admin/map-preview": "Preview Peta Publik",
+const pageTitles = {
+  // "/admin/dashboard": {
+  //   title: "Dashboard",
+  //   subtitle: "Ringkasan data dan aktivitas analisis.",
+  // },
+  "/admin/datasets": {
+    title: "Unggah Data",
+    subtitle: "Manajemen dan pembaharuan indikator operasional perusahaan.",
+  },
+  "/admin/kriteria": {
+    title: "Data Kriteria",
+    subtitle: "Kelola data kriteria untuk analisis AHP dan WLC.",
+  },
+  "/admin/indicators": {
+    title: "Data Indikator",
+    subtitle: "Kelola indikator penilaian untuk proses fuzzy dan WLC.",
+  },
+  "/admin/fuzzy": {
+    title: "Proses Fuzzy",
+    subtitle: "Kelola proses fuzzifikasi data indikator spasial.",
+  },
+  "/admin/ahp": {
+    title: "AHP Responden",
+    subtitle: "Kelola bobot kriteria berdasarkan hasil responden.",
+  },
+  "/admin/wlc": {
+    title: "Hitung WLC",
+    subtitle: "Proses perhitungan Weighted Linear Combination.",
+  },
+  "/admin/map-preview": {
+    title: "Preview & Publish",
+    subtitle: "Pratinjau hasil analisis spasial sebelum dipublikasikan.",
+  },
 };
 
 export default function AdminTopbar() {
   const location = useLocation();
 
-  function handleLogout() {
-    localStorage.removeItem("admin_token");
-  }
+  const currentPage = pageTitles[location.pathname] || {
+    title: "Manajemen Data",
+    subtitle: "Panel administrasi analisis lokasi.",
+  };
 
   return (
-    <header className="border-b border-stone-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Admin</p>
-          <h1 className="text-lg font-bold text-stone-950">{titleByPath[location.pathname] || "Admin"}</h1>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button as="link" to="/map" variant="secondary" className="hidden md:inline-flex">
-            <Map size={16} /> Lihat Peta
-          </Button>
-          <Link
-            to="/admin/login"
-            onClick={handleLogout}
-            className="inline-flex items-center gap-2 rounded-2xl bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-200"
-          >
-            <LogOut size={16} /> Keluar
-          </Link>
-        </div>
+    <header className="border-b border-stone-200 bg-white/95 backdrop-blur px-6 py-5 shadow-xs">
+      <div>
+        <h1 className="text-lg font-extrabold text-[#1D3557] tracking-wide">
+          {currentPage.title}
+        </h1>
+        <p className="mt-1 text-xs font-medium text-stone-500">
+          {currentPage.subtitle}
+        </p>
       </div>
     </header>
   );

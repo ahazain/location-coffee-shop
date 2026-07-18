@@ -9,14 +9,9 @@ generator client {
 
 datasource db {
   provider = "postgresql"
- 
 }
 
-/*
-|--------------------------------------------------------------------------
-| 1. USER / ADMIN
-|--------------------------------------------------------------------------
-*/
+
 
 model User {
   id_user    Int      @id @default(autoincrement())
@@ -24,85 +19,27 @@ model User {
   email      String   @unique @db.VarChar(100)
   password   String   @db.Text
   role       String   @default("admin") @db.VarChar(20)
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   @@map("users")
 }
 
-/*
-|--------------------------------------------------------------------------
-| 2. RIWAYAT UPLOAD DATASET GEOJSON
-|--------------------------------------------------------------------------
-*/
-
-model UploadDataset {
-  id_upload      Int      @id @default(autoincrement())
-  nama_file      String   @db.VarChar(200)
-  jenis_upload   String   @db.VarChar(50)
-  jumlah_feature Int?
-  status         String?  @db.VarChar(50)
-  catatan        String?  @db.Text
-  uploaded_at    DateTime @default(now())
-
-  nilai_indikator NilaiIndikator[]
-
-  @@map("upload_dataset")
-}
-
-/*
-|--------------------------------------------------------------------------
-| 3. DATA SPASIAL GRID
-|--------------------------------------------------------------------------
-*/
-
-model Grid {
-  id_grid    Int      @id @default(autoincrement())
-  kode_grid  String   @unique @db.VarChar(50)
-  kecamatan  String?  @db.VarChar(100)
-  kelurahan  String?  @db.VarChar(100)
-  luas_grid  Decimal? @db.Decimal(15, 6)
-
-  // Geometry polygon dari PostGIS.
-  // Insert/update geometry biasanya lebih aman memakai raw SQL:
-  // ST_GeomFromGeoJSON() atau ST_SetSRID(ST_GeomFromText(), 4326)
-  geom Unsupported("geometry(Polygon,4326)")
+model Kriteria {
+  id_kriteria   Int     @id @default(autoincrement())
+  nama_kriteria String  @db.VarChar(100)
+  deskripsi     String? @db.Text
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  nilai_indikator   NilaiIndikator[]
-  nilai_fuzzy       NilaiFuzzy[]
-  constraint_grid   ConstraintGrid?
-  hasil_wlc         HasilWlc?
-  hasil_wlc_simulasi HasilWlcSimulasi[]
-  validasi_spasial  ValidasiSpasial[]
-
-  @@map("grid")
-}
-
-/*
-|--------------------------------------------------------------------------
-| 4. KRITERIA DAN INDIKATOR
-|--------------------------------------------------------------------------
-*/
-
-model Kriteria {
-  id_kriteria   Int      @id @default(autoincrement())
-  kode_kriteria String?  @unique @db.VarChar(50)
-  nama_kriteria String   @db.VarChar(100)
-  deskripsi     String?  @db.Text
-  urutan        Int?
-  is_active     Boolean  @default(true)
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
-
   indikator Indikator[]
-
-  bobot_kriteria BobotKriteria?
 
   ahp_kriteria_1 AhpKriteriaMatrix[] @relation("AhpKriteria1")
   ahp_kriteria_2 AhpKriteriaMatrix[] @relation("AhpKriteria2")
+
+  bobot_kriteria BobotKriteria[]
 
   ahp_indikator_matrix AhpIndikatorMatrix[]
   ahp_konsistensi      AhpKonsistensi[]
@@ -111,365 +48,288 @@ model Kriteria {
 }
 
 model Indikator {
-  id_indikator   Int      @id @default(autoincrement())
+  id_indikator   Int     @id @default(autoincrement())
   id_kriteria    Int
-  kode_indikator String?  @unique @db.VarChar(50)
-  nama_indikator String   @db.VarChar(150)
-  satuan         String?  @db.VarChar(50)
-  jenis_indikator String? @db.VarChar(50)
+  nama_indikator String  @db.VarChar(150)
+  satuan         String? @db.VarChar(50)
+  tipe_nilai     TipeNilaiIndikator
+  deskripsi      String? @db.Text
 
-  // Tambahan untuk menjelaskan hasil preprocessing dari QGIS
-  tipe_nilai         String? @db.VarChar(50)
-  sumber_data        String? @db.Text
-  metode_pengolahan  String? @db.Text
-
-  deskripsi  String?  @db.Text
-  urutan     Int?
-  is_active  Boolean  @default(true)
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   kriteria Kriteria @relation(fields: [id_kriteria], references: [id_kriteria], onDelete: Cascade)
 
-  nilai_indikator NilaiIndikator[]
   aturan_fuzzy    AturanFuzzy?
-  nilai_fuzzy     NilaiFuzzy[]
-
-  statistik_indikator StatistikIndikator?
-
-  bobot_indikator BobotIndikator?
+  bobot_indikator BobotIndikator[]
+  raster_layers   RasterLayer[]
 
   ahp_indikator_1 AhpIndikatorMatrix[] @relation("AhpIndikator1")
   ahp_indikator_2 AhpIndikatorMatrix[] @relation("AhpIndikator2")
 
-  simulasi_bobot_indikator SimulasiBobotIndikator[]
-
+  @@index([id_kriteria])
   @@map("indikator")
 }
 
-/*
-|--------------------------------------------------------------------------
-| 5. NILAI INDIKATOR ASLI HASIL PREPROCESSING QGIS
-|--------------------------------------------------------------------------
-*/
-
-model NilaiIndikator {
-  id_nilai     Int      @id @default(autoincrement())
-  id_upload    Int?
-  id_grid      Int
-  id_indikator Int
-  nilai_asli   Decimal  @db.Decimal(18, 6)
-  sumber_data  String?  @db.VarChar(100)
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
-
-  upload_dataset UploadDataset? @relation(fields: [id_upload], references: [id_upload], onDelete: SetNull)
-  grid            Grid          @relation(fields: [id_grid], references: [id_grid], onDelete: Cascade)
-  indikator       Indikator     @relation(fields: [id_indikator], references: [id_indikator], onDelete: Cascade)
-
-  @@unique([id_grid, id_indikator])
-  @@index([id_upload])
-  @@index([id_indikator])
-  @@map("nilai_indikator")
-}
-
-/*
-|--------------------------------------------------------------------------
-| 6. STATISTIK INDIKATOR UNTUK WIDGET NORMALISASI
-|--------------------------------------------------------------------------
-*/
-
-model StatistikIndikator {
-  id_statistik   Int      @id @default(autoincrement())
-  id_indikator   Int      @unique
-  nilai_min      Decimal? @db.Decimal(18, 6)
-  nilai_max      Decimal? @db.Decimal(18, 6)
-  nilai_mean     Decimal? @db.Decimal(18, 6)
-  nilai_median   Decimal? @db.Decimal(18, 6)
-  nilai_std      Decimal? @db.Decimal(18, 6)
-  jumlah_data    Int?
-  tanggal_hitung DateTime @default(now())
-
-  indikator Indikator @relation(fields: [id_indikator], references: [id_indikator], onDelete: Cascade)
-
-  @@map("statistik_indikator")
-}
-
-/*
-|--------------------------------------------------------------------------
-| 7. ATURAN DAN HASIL NORMALISASI FUZZY
-|--------------------------------------------------------------------------
-*/
-
 model AturanFuzzy {
-  id_aturan    Int      @id @default(autoincrement())
-  id_indikator Int      @unique
+  id_aturan    Int @id @default(autoincrement())
+  id_indikator Int @unique
 
-  // Contoh: linear, sigmoid, triangular, trapezoid
-  fungsi_fuzzy String   @db.VarChar(50)
+  fungsi_fuzzy FungsiFuzzy
+  arah         ArahFuzzy
 
-  // Contoh: benefit atau cost
-  arah         String   @db.VarChar(20)
+  nilai_min Decimal? @db.Decimal(18, 6)
+  nilai_max Decimal? @db.Decimal(18, 6)
 
-  // Untuk linear benefit/cost
-  nilai_min    Decimal? @db.Decimal(18, 6)
-  nilai_max    Decimal? @db.Decimal(18, 6)
+  midpoint Decimal? @db.Decimal(18, 6)
+  spread   Decimal? @db.Decimal(18, 6)
 
-  // Untuk sigmoid
-  midpoint     Decimal? @db.Decimal(18, 6)
-  spread       Decimal? @db.Decimal(18, 6)
-
-  // Untuk triangular/trapezoid
-  nilai_a      Decimal? @db.Decimal(18, 6)
-  nilai_b      Decimal? @db.Decimal(18, 6)
-  nilai_c      Decimal? @db.Decimal(18, 6)
-  nilai_d      Decimal? @db.Decimal(18, 6)
-
-  keterangan   String?  @db.Text
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   indikator Indikator @relation(fields: [id_indikator], references: [id_indikator], onDelete: Cascade)
 
   @@map("aturan_fuzzy")
 }
 
-model NilaiFuzzy {
-  id_fuzzy     Int      @id @default(autoincrement())
-  id_grid      Int
-  id_indikator Int
-  nilai_fuzzy  Decimal  @db.Decimal(10, 6)
-  tanggal_hitung DateTime @default(now())
+model Pakar {
+  id_pakar   Int     @id @default(autoincrement())
+  nama_pakar String  @db.VarChar(100)
+  institusi   String? @db.VarChar(100)
+  jabatan    String? @db.VarChar(100)
+  
 
-  grid      Grid      @relation(fields: [id_grid], references: [id_grid], onDelete: Cascade)
-  indikator Indikator @relation(fields: [id_indikator], references: [id_indikator], onDelete: Cascade)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-  @@unique([id_grid, id_indikator])
-  @@index([id_indikator])
-  @@map("nilai_fuzzy")
+  ahp_kriteria_matrix  AhpKriteriaMatrix[]
+  bobot_kriteria       BobotKriteria[]
+  ahp_indikator_matrix AhpIndikatorMatrix[]
+  bobot_indikator      BobotIndikator[]
+  ahp_konsistensi      AhpKonsistensi[]
+
+  @@map("pakar")
 }
 
-/*
-|--------------------------------------------------------------------------
-| 8. AHP KRITERIA
-|--------------------------------------------------------------------------
-*/
-
 model AhpKriteriaMatrix {
-  id_matrix          Int      @id @default(autoincrement())
+  id_matrix          Int     @id @default(autoincrement())
+  id_pakar           Int
   id_kriteria_1      Int
   id_kriteria_2      Int
-  nilai_perbandingan Decimal  @db.Decimal(18, 6)
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
+  nilai_perbandingan Decimal @db.Decimal(18, 6)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  pakar Pakar @relation(fields: [id_pakar], references: [id_pakar], onDelete: Cascade)
 
   kriteria_1 Kriteria @relation("AhpKriteria1", fields: [id_kriteria_1], references: [id_kriteria], onDelete: Cascade)
   kriteria_2 Kriteria @relation("AhpKriteria2", fields: [id_kriteria_2], references: [id_kriteria], onDelete: Cascade)
 
-  @@unique([id_kriteria_1, id_kriteria_2])
+  @@unique([id_pakar, id_kriteria_1, id_kriteria_2])
+  @@index([id_pakar])
+  @@index([id_kriteria_1])
   @@index([id_kriteria_2])
   @@map("ahp_kriteria_matrix")
 }
 
 model BobotKriteria {
-  id_bobot_kriteria Int      @id @default(autoincrement())
-  id_kriteria       Int      @unique
-  bobot_kriteria    Decimal  @db.Decimal(10, 6)
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
+  id_bobot_kriteria Int     @id @default(autoincrement())
+  id_pakar          Int
+  id_kriteria       Int
+  bobot_kriteria    Decimal @db.Decimal(10, 6)
 
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  pakar    Pakar    @relation(fields: [id_pakar], references: [id_pakar], onDelete: Cascade)
   kriteria Kriteria @relation(fields: [id_kriteria], references: [id_kriteria], onDelete: Cascade)
 
+  @@unique([id_pakar, id_kriteria])
+  @@index([id_pakar])
+  @@index([id_kriteria])
   @@map("bobot_kriteria")
 }
 
-/*
-|--------------------------------------------------------------------------
-| 9. AHP INDIKATOR
-|--------------------------------------------------------------------------
-*/
-
 model AhpIndikatorMatrix {
-  id_matrix          Int      @id @default(autoincrement())
+  id_matrix          Int     @id @default(autoincrement())
+  id_pakar           Int
   id_kriteria        Int
   id_indikator_1     Int
   id_indikator_2     Int
-  nilai_perbandingan Decimal  @db.Decimal(18, 6)
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
+  nilai_perbandingan Decimal @db.Decimal(18, 6)
 
-  kriteria    Kriteria  @relation(fields: [id_kriteria], references: [id_kriteria], onDelete: Cascade)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  pakar    Pakar    @relation(fields: [id_pakar], references: [id_pakar], onDelete: Cascade)
+  kriteria Kriteria @relation(fields: [id_kriteria], references: [id_kriteria], onDelete: Cascade)
+
   indikator_1 Indikator @relation("AhpIndikator1", fields: [id_indikator_1], references: [id_indikator], onDelete: Cascade)
   indikator_2 Indikator @relation("AhpIndikator2", fields: [id_indikator_2], references: [id_indikator], onDelete: Cascade)
 
-  @@unique([id_kriteria, id_indikator_1, id_indikator_2])
+  @@unique([id_pakar, id_kriteria, id_indikator_1, id_indikator_2])
+  @@index([id_pakar])
+  @@index([id_kriteria])
   @@index([id_indikator_1])
   @@index([id_indikator_2])
   @@map("ahp_indikator_matrix")
 }
 
 model BobotIndikator {
-  id_bobot_indikator Int      @id @default(autoincrement())
-  id_indikator       Int      @unique
-  bobot_lokal        Decimal  @db.Decimal(10, 6)
-  bobot_akhir        Decimal  @db.Decimal(10, 6)
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
+  id_bobot_indikator Int     @id @default(autoincrement())
+  id_pakar           Int?
+  id_indikator       Int
 
-  indikator Indikator @relation(fields: [id_indikator], references: [id_indikator], onDelete: Cascade)
-
-  @@map("bobot_indikator")
-}
-
-/*
-|--------------------------------------------------------------------------
-| 10. HASIL KONSISTENSI AHP
-|--------------------------------------------------------------------------
-*/
-
-model AhpKonsistensi {
-  id_konsistensi     Int      @id @default(autoincrement())
-  tipe               String   @db.VarChar(30)
-  id_kriteria        Int?
-  lambda_max         Decimal? @db.Decimal(18, 6)
-  consistency_index  Decimal? @db.Decimal(18, 6)
-  consistency_ratio  Decimal? @db.Decimal(18, 6)
-  status_konsistensi String?  @db.VarChar(30)
-  tanggal_hitung     DateTime @default(now())
-
-  kriteria Kriteria? @relation(fields: [id_kriteria], references: [id_kriteria], onDelete: SetNull)
-
-  @@index([id_kriteria])
-  @@map("ahp_konsistensi")
-}
-
-/*
-|--------------------------------------------------------------------------
-| 11. CONSTRAINT GRID
-|--------------------------------------------------------------------------
-*/
-
-model ConstraintGrid {
-  id_constraint    Int      @id @default(autoincrement())
-  id_grid          Int      @unique
-  nilai_constraint Int
-  jenis_constraint String?  @db.VarChar(100)
-  keterangan       String?  @db.Text
-  created_at       DateTime @default(now())
-  updated_at       DateTime @updatedAt
-
-  grid Grid @relation(fields: [id_grid], references: [id_grid], onDelete: Cascade)
-
-  @@map("constraint_grid")
-}
-
-/*
-|--------------------------------------------------------------------------
-| 12. HASIL WLC DEFAULT
-|--------------------------------------------------------------------------
-*/
-
-model HasilWlc {
-  id_hasil          Int      @id @default(autoincrement())
-  id_grid           Int      @unique
-  skor_wlc          Decimal  @db.Decimal(10, 6)
-  kelas_kesesuaian  String   @db.VarChar(50)
-  tanggal_hitung    DateTime @default(now())
-
-  grid Grid @relation(fields: [id_grid], references: [id_grid], onDelete: Cascade)
-
-  @@map("hasil_wlc")
-}
-
-/*
-|--------------------------------------------------------------------------
-| 13. SIMULASI BOBOT PELAKU USAHA
-|--------------------------------------------------------------------------
-*/
-
-model Simulasi {
-  id_simulasi  Int      @id @default(autoincrement())
-  nama_simulasi String? @db.VarChar(100)
-  deskripsi    String?  @db.Text
-  created_at   DateTime @default(now())
-
-  simulasi_bobot_indikator SimulasiBobotIndikator[]
-  hasil_wlc_simulasi       HasilWlcSimulasi[]
-
-  @@map("simulasi")
-}
-
-model SimulasiBobotIndikator {
-  id_simulasi_bobot Int     @id @default(autoincrement())
-  id_simulasi       Int
-  id_indikator      Int
-  bobot_simulasi    Decimal @db.Decimal(10, 6)
-
-  simulasi  Simulasi  @relation(fields: [id_simulasi], references: [id_simulasi], onDelete: Cascade)
-  indikator Indikator @relation(fields: [id_indikator], references: [id_indikator], onDelete: Cascade)
-
-  @@unique([id_simulasi, id_indikator])
-  @@index([id_indikator])
-  @@map("simulasi_bobot_indikator")
-}
-
-model HasilWlcSimulasi {
-  id_hasil_simulasi Int      @id @default(autoincrement())
-  id_simulasi       Int
-  id_grid           Int
-  skor_wlc          Decimal  @db.Decimal(10, 6)
-  kelas_kesesuaian  String   @db.VarChar(50)
-  tanggal_hitung    DateTime @default(now())
-
-  simulasi Simulasi @relation(fields: [id_simulasi], references: [id_simulasi], onDelete: Cascade)
-  grid     Grid     @relation(fields: [id_grid], references: [id_grid], onDelete: Cascade)
-
-  @@unique([id_simulasi, id_grid])
-  @@index([id_grid])
-  @@map("hasil_wlc_simulasi")
-}
-
-/*
-|--------------------------------------------------------------------------
-| 14. COFFEE SHOP EKSISTING
-|--------------------------------------------------------------------------
-*/
-
-model CoffeeShopEksisting {
-  id_coffee_shop Int      @id @default(autoincrement())
-  nama           String?  @db.VarChar(150)
-  alamat         String?  @db.Text
-  kecamatan      String?  @db.VarChar(100)
-  kelurahan      String?  @db.VarChar(100)
-  sumber_data    String?  @db.VarChar(100)
-
-  // Titik lokasi coffee shop eksisting.
-  geom Unsupported("geometry(Point,4326)")
+  bobot_lokal Decimal @db.Decimal(10, 6)
+  bobot_akhir Decimal @db.Decimal(10, 6)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  @@map("coffee_shop_eksisting")
+  pakar     Pakar?     @relation(fields: [id_pakar], references: [id_pakar], onDelete: Cascade)
+  indikator Indikator @relation(fields: [id_indikator], references: [id_indikator], onDelete: Cascade)
+
+  @@unique([id_pakar, id_indikator])
+  @@index([id_pakar])
+  @@index([id_indikator])
+  @@map("bobot_indikator")
 }
 
-/*
-|--------------------------------------------------------------------------
-| 15. VALIDASI SPASIAL
-|--------------------------------------------------------------------------
-*/
+model AhpKonsistensi {
+  id_konsistensi Int @id @default(autoincrement())
 
-model ValidasiSpasial {
-  id_validasi       Int      @id @default(autoincrement())
-  id_grid           Int
-  kepadatan_kedai   Decimal? @db.Decimal(18, 6)
-  nilai_constraint  Int?
-  skor_wlc          Decimal? @db.Decimal(10, 6)
-  kelas_kesesuaian  String?  @db.VarChar(50)
-  keterangan        String?  @db.Text
-  tanggal_validasi  DateTime @default(now())
+  id_pakar    Int
+  tipe        TipeKonsistensiAhp
+  id_kriteria Int?
+
+  lambda_max        Decimal? @db.Decimal(18, 6)
+  consistency_index Decimal? @db.Decimal(18, 6)
+  consistency_ratio Decimal? @db.Decimal(18, 6)
+
+  status_konsistensi StatusKonsistensiAhp
+  tanggal_hitung     DateTime @default(now())
+
+  pakar    Pakar     @relation(fields: [id_pakar], references: [id_pakar], onDelete: Cascade)
+  kriteria Kriteria? @relation(fields: [id_kriteria], references: [id_kriteria], onDelete: SetNull)
+
+  @@index([id_pakar])
+  @@index([id_kriteria])
+  @@index([tipe])
+  @@map("ahp_konsistensi")
+}
+
+model RasterLayer {
+  id_raster_layer Int @id @default(autoincrement())
+
+  id_indikator Int?
+
+  kode_layer  String @unique @db.VarChar(100)
+  tipe_raster TipeRaster
+  file_path   String @db.Text
+
+  crs          String? @db.VarChar(50)
+  min_value    Float?
+  max_value    Float?
+  mean_value   Float?
+  nodata_value Float?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  indikator Indikator? @relation(fields: [id_indikator], references: [id_indikator], onDelete: SetNull)
+
+  @@index([id_indikator])
+  @@index([tipe_raster])
+  @@map("raster_layers")
+}
+
+
+model Grid {
+  id_grid   Int    @id @default(autoincrement())
+  kode_grid String @unique @db.VarChar(50)
+
+  kecamatan String? @db.VarChar(100)
+  kelurahan String? @db.VarChar(100)
+
+  geom Unsupported("geometry(Polygon,32749)")
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  hasil_wlc HasilWlc?
+
+  @@map("grid")
+}
+
+model HasilWlc {
+  id_hasil Int @id @default(autoincrement())
+  id_grid  Int @unique
+
+  skor_wlc         Decimal @db.Decimal(10, 6)
+  kelas_kesesuaian KelasKesesuaian 
+  ranking          Int?
+  nilai_indikator  Json?
+
+  tanggal_hitung DateTime @default(now())
 
   grid Grid @relation(fields: [id_grid], references: [id_grid], onDelete: Cascade)
 
-  @@index([id_grid])
-  @@map("validasi_spasial")
+  @@index([skor_wlc])
+  @@index([ranking])
+  @@map("hasil_wlc")
+}
+
+model ExistingCoffeeShop {
+  id_shop Int @id @default(autoincrement())
+
+  nama      String? @db.VarChar(150)
+  latitude  Float
+  longitude Float
+
+  geom Unsupported("geometry(Point,32749)")
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("existing_coffee_shop")
+}
+
+enum TipeRaster {
+  RAW         @map("raw")
+  FUZZY       @map("fuzzy")
+  FINAL_SCORE @map("final_score")
+}
+
+enum FungsiFuzzy {
+  LINEAR @map("linear")
+  NEAR   @map("near")
+}
+
+enum ArahFuzzy {
+  INCREASING @map("increasing")
+  DECREASING @map("decreasing")
+  NEAR       @map("near")
+}
+
+enum TipeNilaiIndikator {
+  KEPADATAN @map("kepadatan")
+  JARAK     @map("jarak")
+  INTENSITAS  @map("intensitas")
+  MASK      @map("mask")
+}
+
+enum TipeKonsistensiAhp {
+  KRITERIA  @map("kriteria")
+  INDIKATOR @map("indikator")
+}
+
+enum KelasKesesuaian {
+ KURANG_SESUAI @map("kurang_sesuai")
+ CUKUP_SESUAI       @map("cukup_sesuai")
+ SESUAI             @map("sesuai")
+}
+enum StatusKonsistensiAhp {
+  KONSISTEN     @map("konsisten")
+  TIDAK_KONSISTEN @map("tidak_konsisten")
 }
