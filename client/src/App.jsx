@@ -13,6 +13,7 @@ import AdminMapPreviewPage from "./pages/AdminMapPreviewPage";
 import AdminKriteriaPage from "./pages/AdminKriteriaPage";
 import AdminValidationPage from "./pages/AdminValidationPage";
 import AdminTop10MapPage from "./pages/AdminTop10MapPage";
+import ErrorPage from "./pages/ErrorPage";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 
 export default function App() {
@@ -26,6 +27,12 @@ export default function App() {
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin/register" element={<AdminRegisterPage />} />
 
+        {/* Custom Error Pages */}
+        <Route path="/error/400" element={<ErrorPage code={400} />} />
+        <Route path="/error/401" element={<ErrorPage code={401} />} />
+        <Route path="/error/403" element={<ErrorPage code={403} />} />
+        <Route path="/error/404" element={<ErrorPage code={404} />} />
+
         {/* Protected Admin Routes */}
         <Route path="/admin" element={<ProtectedRoute><Navigate to="/admin/datasets" replace /></ProtectedRoute>} />
         <Route path="/admin/dashboard" element={<ProtectedRoute><Navigate to="/admin/datasets" replace /></ProtectedRoute>} />
@@ -38,7 +45,9 @@ export default function App() {
         <Route path="/admin/map-preview" element={<ProtectedRoute><AdminMapPreviewPage /></ProtectedRoute>} />
         <Route path="/admin/top-10-map" element={<ProtectedRoute><AdminTop10MapPage /></ProtectedRoute>} />
         <Route path="/admin/validation" element={<ProtectedRoute><AdminValidationPage /></ProtectedRoute>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        
+        {/* Catch-all route */}
+        <Route path="*" element={<ErrorPage code={404} />} />
       </Routes>
     </BrowserRouter>
   );
