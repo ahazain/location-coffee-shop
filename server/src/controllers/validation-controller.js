@@ -19,6 +19,15 @@ class ValidationController {
       ResponseHelper.error(res, error);
     }
   }
+
+  static async syncCoffeeShops(req, res) {
+    try {
+      const result = await ValidationService.syncExistingCoffeeShops();
+      ResponseHelper.success(res, result, `Berhasil menyinkronkan ${result.totalSynced} titik kedai kopi baru.`);
+    } catch (error) {
+      ResponseHelper.error(res, error);
+    }
+  }
 }
 
 module.exports = ValidationController;

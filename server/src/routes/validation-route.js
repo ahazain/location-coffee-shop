@@ -5,5 +5,6 @@ const router = express.Router();
 
 router.get("/stats", ValidationController.getSpatialValidationStats);
 router.get("/points", ValidationController.getExistingCoffeeShops);
+router.post("/sync", ValidationController.syncCoffeeShops);
 
 module.exports = router;

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { GeoJSON, MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { GeoJSON, MapContainer, TileLayer, Marker, Popup, LayersControl } from "react-leaflet";
 import L from "leaflet";
 import { getSuitabilityColor } from "../../utils/mapStyle";
 
@@ -35,10 +35,20 @@ export default function ValidationMapView({
       scrollWheelZoom 
       className="h-full w-full rounded-3xl"
     >
-      <TileLayer 
-        attribution="&copy; OpenStreetMap contributors" 
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
-      />
+      <LayersControl position="topright">
+        <LayersControl.BaseLayer name="OpenStreetMap">
+          <TileLayer 
+            attribution="&copy; OpenStreetMap contributors" 
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+          />
+        </LayersControl.BaseLayer>
+        <LayersControl.BaseLayer checked name="Google Satellite">
+          <TileLayer 
+            attribution="&copy; Google" 
+            url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}" 
+          />
+        </LayersControl.BaseLayer>
+      </LayersControl>
 
       {boundaryGeojson && (
         <GeoJSON
@@ -66,7 +76,6 @@ export default function ValidationMapView({
         data={gridGeojson}
         style={(feature) => {
           const isSelected = selectedGridCode === feature.properties.gridCode;
-          const isConstrained = feature.properties.indicatorScores?.sawah === 0 || feature.properties.indicatorScores?.sempadan_sungai === 0;
 
           return {
             color: isSelected ? "#7c2d12" : "#ffffff",
@@ -99,24 +108,16 @@ export default function ValidationMapView({
       />
 
       {/* Coffee Shop points layer overlaid on top */}
-      {/* {coffeePointsGeojson?.features?.map((feature) => {
+      {coffeePointsGeojson?.features?.map((feature) => {
         const [lon, lat] = feature.geometry.coordinates;
         return (
           <Marker 
             key={feature.properties.id} 
             position={[lat, lon]} 
             icon={coffeeIcon}
-          >
-            <Popup>
-              <div className="font-sans text-xs">
-                <strong className="text-sm text-stone-950">☕ {feature.properties.name || "Kedai Kopi"}</strong><br/>
-                <span className="text-stone-500">OSM ID:</span> <span className="font-mono text-stone-600">{feature.properties.osmId || "-"}</span><br/>
-                <span className="text-stone-500">Koordinat:</span> <span className="font-mono text-stone-600">{lat.toFixed(5)}, {lon.toFixed(5)}</span>
-              </div>
-            </Popup>
-          </Marker>
+          />
         );
-      })} */}
+      })}
     </MapContainer>
   );
 }

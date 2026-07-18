@@ -27,4 +27,8 @@ export const wlcService = {
   async getValidationPoints() {
     return await apiClient.get("/wlc/validation/points");
   },
+
+  async syncValidationPoints() {
+    return await apiClient.post("/wlc/validation/sync", {});
+  },
 };

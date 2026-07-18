@@ -49,7 +49,7 @@ export default function LandingPage() {
             Sistem Pendukung Keputusan Lokasi Coffee Shop
           </h1>
           <p className="mt-6 max-w-2xl text-base font-medium leading-8 text-stone-500">
-            Prototype front end ini disesuaikan dengan proposal: fuzzy diproses otomatis di admin, bobot default dihitung dengan AHP dari kuesioner pelaku usaha berpengalaman, dan skor lokasi dihitung memakai Weighted Linear Combination.
+            Aplikasi WebGIS ini dikembangkan untuk membantu pelaku usaha menemukan lokasi pendirian kedai kopi yang sesuai melalui analisis berbagai indikator. Sistem mengolah data menggunakan standardisasi fuzzy, bobot AHP berdasarkan penilaian pemilik kedai kopi berpengalaman di industri F&B, serta metode Weighted Linear Combination (WLC) untuk menghasilkan rekomendasi lokasi yang sistematis dan berbasis pengalaman praktis.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -67,20 +67,7 @@ export default function LandingPage() {
             </a>
           </div>
 
-          <div className="mt-10 grid max-w-2xl grid-cols-3 gap-3">
-            <div className="rounded-3xl border border-stone-200/60 bg-white/80 p-4 shadow-xs backdrop-blur">
-              <p className="text-2xl font-extrabold text-[#1D3557]">16</p>
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-stone-400">Grid dummy</p>
-            </div>
-            <div className="rounded-3xl border border-stone-200/60 bg-white/80 p-4 shadow-xs backdrop-blur">
-              <p className="text-2xl font-extrabold text-[#1D3557]">13</p>
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-stone-400">Indikator</p>
-            </div>
-            <div className="rounded-3xl border border-stone-200/60 bg-white/80 p-4 shadow-xs backdrop-blur">
-              <p className="text-2xl font-extrabold text-[#1D3557]">AHP</p>
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-stone-400">Wizard AHP</p>
-            </div>
-          </div>
+
         </div>
 
         <Card className="relative overflow-hidden p-5 border border-stone-200/60 shadow-xs rounded-3xl lg:p-6">

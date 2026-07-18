@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, AlertTriangle, Info, MapPin, Calculator, ShieldAlert, FileText, ChevronRight } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Info, MapPin, Calculator, ShieldAlert, FileText, ChevronRight, RefreshCw } from "lucide-react";
 import Card from "../components/common/Card";
 import Badge from "../components/common/Badge";
 import Button from "../components/common/Button";
@@ -17,6 +17,8 @@ export default function AdminValidationPage() {
   const [validationStats, setValidationStats] = useState(null);
   const [selectedGrid, setSelectedGrid] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(null);
   const [error, setError] = useState(null);
   const [activeSampleTab, setActiveSampleTab] = useState("kepadatan_tinggi");
 
@@ -53,6 +55,22 @@ export default function AdminValidationPage() {
   useEffect(() => {
     loadValidationData();
   }, []);
+
+  async function handleSync() {
+    try {
+      setSyncing(true);
+      setSyncSuccess(null);
+      const res = await wlcService.syncValidationPoints();
+      setSyncSuccess(res.message || `Berhasil menyinkronkan ${res.data?.totalSynced || 0} titik kedai kopi baru.`);
+      await loadValidationData();
+      setTimeout(() => setSyncSuccess(null), 6000);
+    } catch (err) {
+      console.error("Gagal sinkronisasi data:", err);
+      alert(err.message || "Terjadi kesalahan saat sinkronisasi data.");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   // Hitung persentase kecocokan model (Sesuai + Cukup Sesuai)
   const matchingStats = validationStats?.sebaran_kelas?.reduce((acc, item) => {
@@ -128,6 +146,14 @@ export default function AdminValidationPage() {
 
   return (
     <AdminLayout>
+      {/* Success Notification Banner */}
+      {syncSuccess && (
+        <div className="mb-6 p-4 rounded-2xl bg-green-50 border border-green-200 text-green-800 text-sm flex items-center gap-2 animate-fadeIn shadow-xs">
+          <CheckCircle2 size={16} className="text-green-600 shrink-0" />
+          <span className="font-medium">{syncSuccess}</span>
+        </div>
+      )}
+
       {/* 1. Header Section */}
       <Card className="mb-6 p-6 shadow-sm border border-stone-200/50 bg-white">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
@@ -136,12 +162,22 @@ export default function AdminValidationPage() {
               <Badge variant="success">Akurasi Model</Badge>
               <span className="text-xs text-stone-400">EPSG:32749 & EPSG:4326</span>
             </div>
-            <h2 className="mt-3 text-2xl font-black text-stone-900">Validasi Spasial Kesesuaian Lahan</h2>
+            <h2 className="mt-3 text-2xl font-black text-stone-900">Validasi Spasial Menggunakan Citra Satelit</h2>
             <p className="mt-2 text-sm leading-relaxed text-stone-500 max-w-3xl">
-              Validasi spasial dilakukan untuk memeriksa apakah skor dan kelas kesesuaian hasil WLC sudah mencerminkan kondisi keruangan yang logis di wilayah studi. Proses ini dilakukan dengan menjadikan kepadatan coffee shop eksisting sebagai acuan pembanding, karena keberadaan coffee shop yang sudah berdiri dan beroperasi dapat dianggap sebagai representasi lokasi yang secara nyata sudah dipilih dan berjalan di lapangan.
+              Validasi spasial dilakukan dengan menggunakan citra satelit saat ini untuk menilai seberapa banyak kedai kopi yang sudah berdiri nyata tahun ini di lapangan. Melalui perbandingan sebaran kedai kopi riil dari citra satelit terhadap hasil analisis WLC (Weighted Linear Combination) yang telah dihasilkan, kita dapat mengevaluasi tingkat kesesuaian dan keakuratan model dalam memprediksi lokasi usaha.
             </p>
           </div>
-          <div className="shrink-0">
+          <div className="shrink-0 flex flex-wrap items-center gap-3">
+            <Button 
+              onClick={handleSync} 
+              disabled={syncing} 
+              variant="primary" 
+              size="sm"
+              className="flex items-center gap-1.5"
+            >
+              <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
+              {syncing ? "Sinkronisasi..." : "Sinkronisasi Google Maps / OSM"}
+            </Button>
             <Button onClick={loadValidationData} variant="secondary" size="sm">Muat Ulang Analisis</Button>
           </div>
         </div>
@@ -159,10 +195,10 @@ export default function AdminValidationPage() {
           </div>
           <div className="mt-4 flex items-baseline gap-2">
             <span className="text-3xl font-black text-stone-900">{matchingStats.persentase.toFixed(2)}%</span>
-            <span className="text-xs text-stone-500">({matchingStats.jumlah} / 22 outlet)</span>
+            <span className="text-xs text-stone-500">({matchingStats.jumlah} / {validationStats?.summary?.total_coffee_shop_eksisting || 0} outlet)</span>
           </div>
           <p className="mt-2 text-xs text-stone-400 leading-relaxed">
-            Persentase kedai kopi eksisting yang sukses berada di zona yang dinilai <strong>Sesuai</strong> atau <strong>Cukup Sesuai</strong> oleh model WLC.
+            Persentase kedai kopi nyata dari citra satelit saat ini yang berada di zona dinilai <strong>Sesuai</strong> atau <strong>Cukup Sesuai</strong> oleh analisis WLC yang telah dihasilkan.
           </p>
         </Card>
 
@@ -176,10 +212,10 @@ export default function AdminValidationPage() {
           </div>
           <div className="mt-4 flex items-baseline gap-2">
             <span className="text-3xl font-black text-red-600">{validationStats?.pelanggaran_constraint?.persentase_pelanggaran}%</span>
-            <span className="text-xs text-stone-500">({validationStats?.pelanggaran_constraint?.total_pelanggaran} / 22 outlet)</span>
+            <span className="text-xs text-stone-500">({validationStats?.pelanggaran_constraint?.total_pelanggaran} / {validationStats?.summary?.total_coffee_shop_eksisting || 0} outlet)</span>
           </div>
           <p className="mt-2 text-xs text-stone-400 leading-relaxed">
-            Jumlah kedai kopi eksisting yang berdiri di atas wilayah pembatas (Sawah Irigasi atau Sempadan Sungai).
+            Jumlah kedai kopi dari citra satelit saat ini yang terdeteksi berdiri di atas wilayah pembatas (Sawah Irigasi atau Sempadan Sungai).
           </p>
         </Card>
 
@@ -254,130 +290,70 @@ export default function AdminValidationPage() {
         <GridDetailPanel selectedGrid={formatGridForDetail(selectedGrid)} />
       </div>
 
-      {/* 4. Representative Sample Grid Audit Cards */}
+      {/* 4. Classification Validation Cards */}
       <Card className="p-6 border border-stone-200/50 bg-white shadow-sm">
         <div>
-          <h3 className="text-base font-bold text-stone-900">Audit Sampel Grid Wilayah</h3>
-          <p className="text-xs text-stone-400 mt-1">Pilih salah satu grid sampel audit di bawah ini untuk melihat detail kecocokan parameter spasial di lapangan.</p>
+          <h3 className="text-base font-bold text-stone-900">Hasil Validasi Spasial per Klasifikasi Kesesuaian Lahan</h3>
+          <p className="text-xs text-stone-400 mt-1">Distribusi sebaran outlet kedai kopi eksisting berdasarkan analisis spasial citra satelit pada setiap kelas kesesuaian WLC.</p>
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-6 grid gap-6 sm:grid-cols-1 md:grid-cols-3">
           {[
             {
-              key: "kepadatan_tinggi",
-              label: "Kepadatan Tertinggi",
-              grid: validationStats?.sampel_grid?.kepadatan_tinggi?.[0],
-              badgeStyle: "bg-amber-50 text-amber-700 border border-amber-100",
-              desc: "Memiliki jumlah outlet coffee shop terbanyak yang aktif beroperasi saat ini di lapangan."
-            },
-            {
-              key: "tanpa_kopi_kuat",
-              label: "Tanpa Pesaing (Sesuai)",
-              grid: validationStats?.sampel_grid?.tanpa_kopi_kuat?.[0],
+              key: "Sesuai",
+              label: "Sesuai",
               badgeStyle: "bg-green-50 text-green-700 border border-green-100",
-              desc: "Bebas dari pesaing terdekat dan dinilai sangat potensial (Sesuai) menurut model WLC."
+              textStyle: "text-green-700",
+              desc: "Zona dengan tingkat kesesuaian tinggi berdasarkan analisis WLC. Menunjukkan area paling optimal yang direkomendasikan untuk pendirian kedai kopi."
             },
             {
-              key: "tanpa_kopi_lemah",
-              label: "Tanpa Pesaing (Kurang Sesuai)",
-              grid: validationStats?.sampel_grid?.tanpa_kopi_lemah?.[0],
+              key: "Cukup Sesuai",
+              label: "Cukup Sesuai",
               badgeStyle: "bg-blue-50 text-blue-700 border border-blue-100",
-              desc: "Bebas dari pesaing namun memiliki potensi pasar atau aksesibilitas yang sangat rendah."
+              textStyle: "text-blue-700",
+              desc: "Zona dengan tingkat kesesuaian sedang/moderat. Area yang menawarkan potensi pasar cukup baik dengan beberapa faktor pendukung."
             },
             {
-              key: "pembatas_lahan",
-              label: "Area Constraint",
-              grid: validationStats?.sampel_grid?.pembatas_lahan?.[0],
+              key: "Kurang Sesuai",
+              label: "Kurang Sesuai",
               badgeStyle: "bg-red-50 text-red-700 border border-red-100",
-              desc: "Berada di atas kawasan perlindungan lingkungan (Sawah Irigasi atau Sempadan Sungai) sehingga tidak boleh dibangun."
+              textStyle: "text-red-700",
+              desc: "Zona dengan tingkat kesesuaian rendah. Area yang memiliki keterbatasan faktor pasar, aksesibilitas, atau terkena dampak constraint."
             }
-          ].map(({ key, label, grid, badgeStyle, desc }) => {
-            if (!grid) return null;
-            const isSelected = selectedGrid?.kode_grid === grid.kode_grid;
-            const isSawah = grid.nilai_indikator?.sawah === 0;
-            const isSungai = grid.nilai_indikator?.sempadan_sungai === 0;
-
+          ].map(({ key, label, badgeStyle, textStyle, desc }) => {
+            const classStat = validationStats?.sebaran_kelas?.find(item => item.kelas_kesesuaian === key) || { jumlah: 0, persentase: 0 };
+            
             return (
               <div
                 key={key}
-                onClick={() => setSelectedGrid(grid)}
-                className={`relative flex flex-col justify-between rounded-3xl p-5 border transition-all duration-300 cursor-pointer select-none h-full hover:shadow-md ${
-                  isSelected 
-                    ? "border-[#1D3557] bg-stone-50/50 shadow-md ring-2 ring-[#1D3557]/20 scale-[1.02]" 
-                    : "border-stone-200/80 bg-white hover:border-stone-400"
-                }`}
+                className="flex flex-col justify-between rounded-3xl p-6 border border-stone-200 bg-white hover:shadow-md transition-all duration-300"
               >
                 <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${badgeStyle}`}>
-                      {label}
-                    </span>
-                    <span className="text-[10px] text-stone-400 font-medium font-mono">
-                      {grid.kecamatan || "-"}
+                  <div className="flex items-center justify-between">
+                    <span className={`rounded-full px-3 py-0.5 text-xs font-bold ${badgeStyle}`}>
+                      Kelas {label}
                     </span>
                   </div>
 
-                  <h4 className="mt-4 text-2xl font-black text-stone-900 tracking-tight">
-                    {grid.kode_grid}
-                  </h4>
-                  <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">
-                    Kel. {grid.kelurahan || "-"}
-                  </p>
-                  
-                  <p className="text-[10px] text-stone-500 mt-3 leading-normal italic min-h-[32px]">
+                  <div className="mt-6">
+                    <span className="block text-stone-500 text-xs font-medium uppercase tracking-wider">Sebaran Kedai Kopi</span>
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <span className={`text-4xl font-black ${textStyle}`}>
+                        {classStat.persentase.toFixed(2)}%
+                      </span>
+                      <span className="text-sm font-semibold text-stone-500">
+                        ({classStat.jumlah} Outlet)
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="mt-4 text-xs leading-relaxed text-stone-500">
                     {desc}
                   </p>
-
-                  <div className="mt-4 pt-3 border-t border-stone-100 space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-stone-400">Skor WLC</span>
-                      <span className="font-mono font-bold text-stone-900">
-                        {grid.skor_wlc?.toFixed(5) || "0.00000"}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-stone-400">Kelas</span>
-                      <span 
-                        className="font-bold text-[11px]" 
-                        style={{ color: getSuitabilityColor(grid.kelas_kesesuaian) }}
-                      >
-                        {grid.kelas_kesesuaian}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-start text-xs pt-1">
-                      <span className="text-stone-400">Constraint</span>
-                      <div className="flex flex-col items-end gap-1">
-                        {isSawah || isSungai ? (
-                          <div className="flex flex-wrap justify-end gap-1 text-[9px] font-bold">
-                            {isSawah && <span className="bg-red-50 text-red-600 px-1 rounded-md">🌾 Sawah</span>}
-                            {isSungai && <span className="bg-blue-50 text-blue-600 px-1 rounded-md">🌊 Sungai</span>}
-                          </div>
-                        ) : (
-                          <span className="text-stone-400 text-[10px]">Aman</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
-                <div className="mt-6">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedGrid(grid);
-                    }}
-                    className={`w-full flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl text-xs font-bold transition-all active:scale-[0.98] cursor-pointer ${
-                      isSelected 
-                        ? "bg-[#1D3557] text-white shadow-sm" 
-                        : "bg-stone-50 text-stone-600 hover:bg-stone-100"
-                    }`}
-                  >
-                    <span>Audit Detail</span>
-                    <ChevronRight size={14} />
-                  </button>
+                <div className="mt-6 pt-4 border-t border-stone-100 text-[11px] text-stone-400">
+                  Divalidasi menggunakan citra satelit terhadap hasil analisis WLC yang sudah dihasilkan.
                 </div>
               </div>
             );

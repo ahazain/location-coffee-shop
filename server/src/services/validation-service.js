@@ -228,6 +228,57 @@ class ValidationService {
       }
     };
   }
+
+  /**
+   * Menyinkronkan titik coffee shop eksisting dengan data dari file GeoJSON lokal
+   * (data-coffeeshop.geojson) yang berisi 22 kedai kopi, lalu memproyeksikannya.
+   */
+  static async syncExistingCoffeeShops() {
+    const fs = require("fs");
+    const path = require("path");
+    const geojsonPath = path.join(process.cwd(), "src/prisma/seeder/data-coffeeshop.geojson");
+
+    if (!fs.existsSync(geojsonPath)) {
+      throw new NotFoundError("File data-coffeeshop.geojson tidak ditemukan di folder seeder.");
+    }
+
+    const rawData = fs.readFileSync(geojsonPath, "utf-8");
+    const geojson = JSON.parse(rawData);
+    const features = geojson.features || [];
+
+    if (features.length === 0) {
+      throw new BadRequestError("Tidak ditemukan data kedai kopi di dalam file GeoJSON.");
+    }
+
+    // Masukkan ke database (transaksi: truncate & insert)
+    await prisma.$transaction(async (tx) => {
+      // Hapus data lama
+      await tx.$executeRawUnsafe(`TRUNCATE TABLE existing_coffee_shop CASCADE`);
+
+      // Insert data baru dengan memproyeksikan koordinat UTM (EPSG:32749) ke WGS84 (EPSG:4326)
+      for (const f of features) {
+        const name = f.properties?.name || "Kedai Kopi Tanpa Nama";
+        const [x, y] = f.geometry.coordinates;
+
+        await tx.$executeRawUnsafe(`
+          INSERT INTO existing_coffee_shop (nama, latitude, longitude, geom, created_at, updated_at)
+          VALUES (
+            $1,
+            ST_Y(ST_Transform(ST_SetSRID(ST_Point($2, $3), 32749), 4326)),
+            ST_X(ST_Transform(ST_SetSRID(ST_Point($2, $3), 32749), 4326)),
+            ST_SetSRID(ST_Point($2, $3), 32749),
+            NOW(),
+            NOW()
+          )
+        `, name, x, y);
+      }
+    });
+
+    return {
+      success: true,
+      totalSynced: features.length
+    };
+  }
 }
 
 module.exports = ValidationService;
