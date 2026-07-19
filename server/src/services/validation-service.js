@@ -62,10 +62,16 @@ class ValidationService {
       return dbClass;
     };
 
-    // 2. Hitung total coffee shop eksisting di database
-    const totalCoffeeShopsCount = await prisma.existingCoffeeShop.count();
+    // 2. Hitung total coffee shop eksisting di database, auto-sync jika kosong (self-healing)
+    let totalCoffeeShopsCount = await prisma.existingCoffeeShop.count();
     if (totalCoffeeShopsCount === 0) {
-      throw new BadRequestError("Data coffee shop eksisting belum di-seed ke database.");
+      console.log("[Validation] Data kosong. Mengimpor otomatis dari data-coffeeshop.geojson...");
+      try {
+        await this.syncExistingCoffeeShops();
+        totalCoffeeShopsCount = await prisma.existingCoffeeShop.count();
+      } catch (err) {
+        throw new BadRequestError("Data coffee shop eksisting belum di-seed ke database dan gagal diimpor secara otomatis: " + err.message);
+      }
     }
 
     // 3. Distribusi sebaran coffee shop eksisting pada kelas kesesuaian WLC (Overlay Point-in-Polygon)
@@ -99,16 +105,17 @@ class ValidationService {
 
     // 4. Deteksi coffee shop yang menabrak area constraint (sawah / sempadan sungai)
     //    HANYA grid yang berada di dalam wilayah studi (memiliki kecamatan terisi)
+    //    ID 14 = sawah, ID 15 = sempadan_sungai
     const constraintViolationsRaw = await prisma.$queryRawUnsafe(`
       SELECT
         COUNT(c.id_shop)::int as total_pelanggaran,
-        COUNT(CASE WHEN (h.nilai_indikator->>'sawah')::numeric = 0 THEN 1 END)::int as pelanggaran_sawah,
-        COUNT(CASE WHEN (h.nilai_indikator->>'sempadan_sungai')::numeric = 0 THEN 1 END)::int as pelanggaran_sungai
+        COUNT(CASE WHEN (h.nilai_indikator->>'ind_14')::numeric = 0 THEN 1 END)::int as pelanggaran_sawah,
+        COUNT(CASE WHEN (h.nilai_indikator->>'ind_15')::numeric = 0 THEN 1 END)::int as pelanggaran_sungai
       FROM grid g
       INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
       INNER JOIN existing_coffee_shop c ON ST_Contains(g.geom, c.geom)
       WHERE g.kecamatan IS NOT NULL  -- Hanya grid di dalam wilayah studi
-        AND ((h.nilai_indikator->>'sawah')::numeric = 0 OR (h.nilai_indikator->>'sempadan_sungai')::numeric = 0)
+        AND ((h.nilai_indikator->>'ind_14')::numeric = 0 OR (h.nilai_indikator->>'ind_15')::numeric = 0)
     `);
 
     const violations = constraintViolationsRaw[0] || { total_pelanggaran: 0, pelanggaran_sawah: 0, pelanggaran_sungai: 0 };
@@ -138,6 +145,7 @@ class ValidationService {
     `);
 
     // 2. Sampel grid Tanpa Kopi Kuat (tanpa coffee shop eksisting tergolong kelas Sesuai)
+    //    ID 12 = kepadatan_coffee_shop_existing
     const sampelTanpaKopiKuat = await prisma.$queryRawUnsafe(`
       SELECT
         g.kode_grid,
@@ -151,12 +159,13 @@ class ValidationService {
       INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
       WHERE g.kecamatan IS NOT NULL
         AND h.kelas_kesesuaian = 'sesuai'
-        AND (h.nilai_indikator->>'kepadatan_coffee_shop_existing')::numeric = 0
+        AND (h.nilai_indikator->>'ind_12')::numeric = 0
       ORDER BY h.skor_wlc DESC
       LIMIT 1
     `);
 
     // 3. Sampel grid Tanpa Kopi Lemah (tanpa coffee shop eksisting tergolong kelas Kurang Sesuai)
+    //    ID 14 = sawah, ID 15 = sempadan_sungai, ID 12 = kepadatan_coffee_shop_existing
     const sampelTanpaKopiLemah = await prisma.$queryRawUnsafe(`
       SELECT
         g.kode_grid,
@@ -170,14 +179,15 @@ class ValidationService {
       INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
       WHERE g.kecamatan IS NOT NULL
         AND h.kelas_kesesuaian = 'kurang_sesuai'
-        AND (h.nilai_indikator->>'sawah')::numeric = 1
-        AND (h.nilai_indikator->>'sempadan_sungai')::numeric = 1
-        AND (h.nilai_indikator->>'kepadatan_coffee_shop_existing')::numeric = 0
+        AND (h.nilai_indikator->>'ind_14')::numeric = 1
+        AND (h.nilai_indikator->>'ind_15')::numeric = 1
+        AND (h.nilai_indikator->>'ind_12')::numeric = 0
       ORDER BY h.skor_wlc DESC
       LIMIT 1
     `);
 
     // 4. Sampel grid Pembatas Lahan (berada pada area constraint = 0)
+    //    ID 14 = sawah, ID 15 = sempadan_sungai
     const sampelPembatasLahan = await prisma.$queryRawUnsafe(`
       SELECT
         g.kode_grid,
@@ -190,7 +200,7 @@ class ValidationService {
       FROM grid g
       INNER JOIN hasil_wlc h ON g.id_grid = h.id_grid
       WHERE g.kecamatan IS NOT NULL
-        AND ((h.nilai_indikator->>'sawah')::numeric = 0 OR (h.nilai_indikator->>'sempadan_sungai')::numeric = 0)
+        AND ((h.nilai_indikator->>'ind_14')::numeric = 0 OR (h.nilai_indikator->>'ind_15')::numeric = 0)
       ORDER BY h.skor_wlc ASC
       LIMIT 1
     `);
