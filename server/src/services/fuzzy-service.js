@@ -16,6 +16,9 @@ const {
 } = require("../utils/error-handling-util");
 
 class FuzzyService {
+  // Default spread untuk fungsi NEAR (selalu 0.2, tidak bisa di-custom)
+  static DEFAULT_NEAR_SPREAD = 0.2;
+
   static parseId(id, fieldName = "ID") {
     const parsedId = Number(id);
 
@@ -192,8 +195,9 @@ class FuzzyService {
   }
 
   /**
-   * Hitung nilai midpoint otomatis (median) untuk fungsi NEAR dari pixel
+   * Hitung nilai midpoint otomatis (midrange) untuk fungsi NEAR dari pixel
    * raster raw, bila user tidak mengirim midpoint sendiri.
+   * Midrange = (min + max) / 2
    */
   static async computeAutoMidpointFromRaster(rawRaster) {
     try {
@@ -210,6 +214,7 @@ class FuzzyService {
           v !== undefined &&
           !Number.isNaN(v) &&
           Number.isFinite(v) &&
+          v > 0 &&
           (noDataValue === null || v !== noDataValue),
       );
 
@@ -218,13 +223,13 @@ class FuzzyService {
       }
 
       validValues.sort((a, b) => a - b);
-      const mid = Math.floor(validValues.length / 2);
+      const minVal = validValues[0];
+      const maxVal = validValues[validValues.length - 1];
 
-      return validValues.length % 2 !== 0
-        ? validValues[mid]
-        : (validValues[mid - 1] + validValues[mid]) / 2;
+      // Midrange = (min + max) / 2
+      return (minVal + maxVal) / 2;
     } catch (err) {
-      console.error("Gagal menghitung median otomatis:", err.message);
+      console.error("Gagal menghitung midrange otomatis:", err.message);
       return 0;
     }
   }
@@ -266,32 +271,16 @@ class FuzzyService {
     const {
       id_indikator,
       fungsi_fuzzy,
-      arah,
-      midpoint,
-      spread,
-      nilai_min,
-      nilai_max,
     } = payload;
+
+    // Validasi: fungsi_fuzzy wajib dipilih
+    if (!fungsi_fuzzy) {
+      throw new BadRequestError("Fungsi fuzzy wajib dipilih (INCREASING, DECREASING, atau NEAR).");
+    }
 
     const indikator = await this.getIndikatorOrThrow(id_indikator);
 
-    const midpointProvided =
-      midpoint !== undefined && midpoint !== null && midpoint !== "";
-
-    const validated = this.validateRulePayload({
-      fungsi_fuzzy,
-      arah,
-      midpoint: midpointProvided ? midpoint : 0,
-    });
-
-    const isNear = validated.fungsi_fuzzy === FungsiFuzzy.NEAR;
-
-    const statusSpread =
-      spread !== undefined && spread !== null && spread !== ""
-        ? Number(spread)
-        : null;
-
-    // Ambil raster raw aktif untuk auto-fill min/max/median
+    // Ambil raster raw untuk mendapatkan min/max dari metadata
     const rawRaster = await prisma.rasterLayer.findFirst({
       where: {
         id_indikator: indikator.id_indikator,
@@ -299,41 +288,44 @@ class FuzzyService {
       },
     });
 
-    let autoMin =
-      !isNear &&
-      nilai_min !== undefined &&
-      nilai_min !== null &&
-      nilai_min !== ""
-        ? Number(nilai_min)
-        : null;
-    let autoMax =
-      !isNear &&
-      nilai_max !== undefined &&
-      nilai_max !== null &&
-      nilai_max !== ""
-        ? Number(nilai_max)
-        : null;
-    let autoMidpoint = isNear
-      ? midpointProvided
-        ? Number(midpoint)
-        : null
-      : null;
+    if (!rawRaster) {
+      throw new BadRequestError("Dataset raster belum diupload untuk indikator ini. Upload dataset terlebih dahulu.");
+    }
 
-    if (rawRaster) {
-      if (!isNear) {
-        if (autoMin === null) {
-          autoMin =
-            rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
-        }
-        if (autoMax === null) {
-          autoMax =
-            rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
-        }
-      }
+    // Konversi dari frontend format ke Prisma enum
+    // Frontend: INCREASING, DECREASING, NEAR
+    // Prisma FungsiFuzzy: LINEAR, NEAR
+    // Prisma ArahFuzzy: INCREASING, DECREASING, NEAR
+    let prismaFungsiFuzzy;
+    let prismaArah;
+    let nilai_min = null;
+    let nilai_max = null;
+    let midpoint = null;
+    let spread = null;
 
-      if (isNear && autoMidpoint === null) {
-        autoMidpoint = await this.computeAutoMidpointFromRaster(rawRaster);
-      }
+    if (fungsi_fuzzy === "NEAR") {
+      prismaFungsiFuzzy = FungsiFuzzy.NEAR;
+      prismaArah = ArahFuzzy.NEAR;
+      const minVal = rawRaster.min_value !== null ? Number(rawRaster.min_value) : 0;
+      const maxVal = rawRaster.max_value !== null ? Number(rawRaster.max_value) : 0;
+      midpoint = (minVal + maxVal) / 2;
+      spread = this.DEFAULT_NEAR_SPREAD; // 0.2
+    } else if (fungsi_fuzzy === "DECREASING") {
+      prismaFungsiFuzzy = FungsiFuzzy.LINEAR;
+      prismaArah = ArahFuzzy.DECREASING;
+      nilai_min = rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
+      nilai_max = rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
+    } else {
+      // INCREASING (default)
+      prismaFungsiFuzzy = FungsiFuzzy.LINEAR;
+      prismaArah = ArahFuzzy.INCREASING;
+      nilai_min = rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
+      nilai_max = rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
+    }
+
+    // Validasi: pastikan min/max tidak null untuk INCREASING/DECREASING
+    if (fungsi_fuzzy !== "NEAR" && (nilai_min === null || nilai_max === null)) {
+      throw new BadRequestError("Metadata raster tidak lengkap. Pastikan dataset raster memiliki nilai min dan max.");
     }
 
     const saved = await prisma.aturanFuzzy.upsert({
@@ -341,21 +333,21 @@ class FuzzyService {
         id_indikator: indikator.id_indikator,
       },
       update: {
-        fungsi_fuzzy: validated.fungsi_fuzzy,
-        arah: validated.arah,
-        nilai_min: autoMin,
-        nilai_max: autoMax,
-        midpoint: isNear ? autoMidpoint : null,
-        spread: isNear ? statusSpread : null,
+        fungsi_fuzzy: prismaFungsiFuzzy,
+        arah: prismaArah,
+        nilai_min: nilai_min,
+        nilai_max: nilai_max,
+        midpoint: midpoint,
+        spread: spread,
       },
       create: {
         id_indikator: indikator.id_indikator,
-        fungsi_fuzzy: validated.fungsi_fuzzy,
-        arah: validated.arah,
-        nilai_min: autoMin,
-        nilai_max: autoMax,
-        midpoint: isNear ? autoMidpoint : null,
-        spread: isNear ? statusSpread : null,
+        fungsi_fuzzy: prismaFungsiFuzzy,
+        arah: prismaArah,
+        nilai_min: nilai_min,
+        nilai_max: nilai_max,
+        midpoint: midpoint,
+        spread: spread,
       },
     });
 
@@ -377,46 +369,12 @@ class FuzzyService {
       throw new NotFoundError("Aturan fuzzy untuk indikator ini belum ada.");
     }
 
-    // existing.fungsi_fuzzy / existing.arah sudah berupa enum Prisma (UPPERCASE),
-    // FuzzyHelper.normalizeFunctionName/normalizeArah menerima keduanya
-    // (case-insensitive) jadi aman dipakai langsung sebagai default.
-    const mergedPayload = {
-      fungsi_fuzzy: payload.fungsi_fuzzy ?? existing.fungsi_fuzzy,
-      arah: payload.arah ?? existing.arah,
-      midpoint:
-        payload.midpoint !== undefined ? payload.midpoint : existing.midpoint,
-      spread: payload.spread !== undefined ? payload.spread : existing.spread,
-      nilai_min:
-        payload.nilai_min !== undefined
-          ? payload.nilai_min
-          : existing.nilai_min,
-      nilai_max:
-        payload.nilai_max !== undefined
-          ? payload.nilai_max
-          : existing.nilai_max,
-    };
+    // Validasi: fungsi_fuzzy wajib dipilih
+    if (!payload.fungsi_fuzzy) {
+      throw new BadRequestError("Fungsi fuzzy wajib dipilih (INCREASING, DECREASING, atau NEAR).");
+    }
 
-    const midpointProvided =
-      mergedPayload.midpoint !== undefined &&
-      mergedPayload.midpoint !== null &&
-      mergedPayload.midpoint !== "";
-
-    const validated = this.validateRulePayload({
-      fungsi_fuzzy: mergedPayload.fungsi_fuzzy,
-      arah: mergedPayload.arah,
-      midpoint: midpointProvided ? mergedPayload.midpoint : 0,
-    });
-
-    const isNear = validated.fungsi_fuzzy === FungsiFuzzy.NEAR;
-
-    const statusSpread =
-      mergedPayload.spread !== undefined &&
-      mergedPayload.spread !== null &&
-      mergedPayload.spread !== ""
-        ? Number(mergedPayload.spread)
-        : null;
-
-    // Ambil raster raw aktif untuk update min/max/median
+    // Ambil raster raw untuk mendapatkan min/max dari metadata
     const rawRaster = await prisma.rasterLayer.findFirst({
       where: {
         id_indikator: parsedId,
@@ -424,41 +382,50 @@ class FuzzyService {
       },
     });
 
-    let autoMin =
-      !isNear &&
-      mergedPayload.nilai_min !== null &&
-      mergedPayload.nilai_min !== undefined &&
-      mergedPayload.nilai_min !== ""
-        ? Number(mergedPayload.nilai_min)
-        : null;
-    let autoMax =
-      !isNear &&
-      mergedPayload.nilai_max !== null &&
-      mergedPayload.nilai_max !== undefined &&
-      mergedPayload.nilai_max !== ""
-        ? Number(mergedPayload.nilai_max)
-        : null;
-    let autoMidpoint = isNear
-      ? midpointProvided
-        ? Number(mergedPayload.midpoint)
-        : null
-      : null;
+    if (!rawRaster) {
+      throw new BadRequestError("Dataset raster belum diupload untuk indikator ini. Upload dataset terlebih dahulu.");
+    }
 
-    if (rawRaster) {
-      if (!isNear) {
-        if (autoMin === null) {
-          autoMin =
-            rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
-        }
-        if (autoMax === null) {
-          autoMax =
-            rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
-        }
-      }
+    // Konversi dari frontend format ke Prisma enum
+    let prismaFungsiFuzzy;
+    let prismaArah;
 
-      if (isNear && autoMidpoint === null) {
-        autoMidpoint = await this.computeAutoMidpointFromRaster(rawRaster);
-      }
+    if (payload.fungsi_fuzzy === "NEAR") {
+      prismaFungsiFuzzy = FungsiFuzzy.NEAR;
+      prismaArah = ArahFuzzy.NEAR;
+    } else if (payload.fungsi_fuzzy === "DECREASING") {
+      prismaFungsiFuzzy = FungsiFuzzy.LINEAR;
+      prismaArah = ArahFuzzy.DECREASING;
+    } else {
+      prismaFungsiFuzzy = FungsiFuzzy.LINEAR;
+      prismaArah = ArahFuzzy.INCREASING;
+    }
+
+    // Tentukan nilai berdasarkan fungsi fuzzy
+    let nilai_min = null;
+    let nilai_max = null;
+    let midpoint = null;
+    let spread = null;
+
+    if (payload.fungsi_fuzzy === "NEAR") {
+      // NEAR: midpoint = (min + max) / 2, spread = 0.2
+      const minVal = rawRaster.min_value !== null ? Number(rawRaster.min_value) : 0;
+      const maxVal = rawRaster.max_value !== null ? Number(rawRaster.max_value) : 0;
+      midpoint = (minVal + maxVal) / 2;
+      spread = this.DEFAULT_NEAR_SPREAD; // 0.2
+    } else if (payload.fungsi_fuzzy === "DECREASING") {
+      // DECREASING: min/max dari metadata raster
+      nilai_min = rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
+      nilai_max = rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
+    } else {
+      // INCREASING: min/max dari metadata raster
+      nilai_min = rawRaster.min_value !== null ? Number(rawRaster.min_value) : null;
+      nilai_max = rawRaster.max_value !== null ? Number(rawRaster.max_value) : null;
+    }
+
+    // Validasi: pastikan min/max tidak null untuk INCREASING/DECREASING
+    if (payload.fungsi_fuzzy !== "NEAR" && (nilai_min === null || nilai_max === null)) {
+      throw new BadRequestError("Metadata raster tidak lengkap. Pastikan dataset raster memiliki nilai min dan max.");
     }
 
     const updated = await prisma.aturanFuzzy.update({
@@ -466,12 +433,12 @@ class FuzzyService {
         id_indikator: parsedId,
       },
       data: {
-        fungsi_fuzzy: validated.fungsi_fuzzy,
-        arah: validated.arah,
-        nilai_min: autoMin,
-        nilai_max: autoMax,
-        midpoint: isNear ? autoMidpoint : null,
-        spread: isNear ? statusSpread : null,
+        fungsi_fuzzy: prismaFungsiFuzzy,
+        arah: prismaArah,
+        nilai_min: nilai_min,
+        nilai_max: nilai_max,
+        midpoint: midpoint,
+        spread: spread,
       },
     });
 

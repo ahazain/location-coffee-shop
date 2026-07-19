@@ -9,6 +9,10 @@ import {
   TrendingDown,
   TrendingUp,
   Target,
+  Save,
+  X,
+  Info,
+  Sparkles,
 } from "lucide-react";
 import Card from "../components/common/Card";
 import Toast from "../components/common/Toast";
@@ -22,16 +26,17 @@ import { indikatorService } from "../services/api/indikatorService";
 // ============================================================
 
 function fuzzyLabel(type) {
-  if (type === "linear_increasing") return "Benefit (Linear Increasing)";
-  if (type === "linear_decreasing") return "Cost (Linear Decreasing)";
-  if (type === "near") return "Optimum (Near)";
+  if (type === "LINEAR") return "Linear";
+  if (type === "linear_increasing" || type === "INCREASING") return "Linear Increasing (Benefit)";
+  if (type === "linear_decreasing" || type === "DECREASING") return "Linear Decreasing (Cost)";
+  if (type === "NEAR") return "Near (Optimum)";
   return type || "-";
 }
 
 function arahLabel(arah) {
-  if (arah === "benefit") return "Benefit";
-  if (arah === "cost") return "Cost";
-  if (arah === "optimum") return "Optimum";
+  if (arah === "benefit" || arah === "INCREASING") return "Benefit";
+  if (arah === "cost" || arah === "DECREASING") return "Cost";
+  if (arah === "optimum" || arah === "NEAR") return "Optimum";
   return arah || "-";
 }
 
@@ -54,7 +59,268 @@ function getKriteriaName(indikator) {
 
 function formatValue(value) {
   if (value === null || value === undefined || value === "") return "-";
-  return value;
+  return Number(value).toFixed(4);
+}
+
+// Rekomendasi aturan fuzzy berdasarkan ID indikator
+// NOTE: ID 4, 9, 10 adalah indikator jarak (DECREASING)
+//       ID 12, 13 adalah indikator persaingan (NEAR)
+function getRecommendedFuzzy(indicatorId) {
+  // Indikator 4, 9, 10 → DECREASING (jarak)
+  if ([4, 9, 10].includes(Number(indicatorId))) {
+    return {
+      fungsi_fuzzy: "DECREASING",
+      note: "Rekomendasi: Cost (semakin kecil semakin baik)"
+    };
+  }
+  // Indikator 12, 13 → NEAR (persaingan)
+  if ([12, 13].includes(Number(indicatorId))) {
+    return {
+      fungsi_fuzzy: "NEAR",
+      note: "Rekomendasi: Optimum (nilai ideal di sekitar midpoint)"
+    };
+  }
+  // Default → INCREASING (semakin besar semakin baik)
+  return {
+    fungsi_fuzzy: "INCREASING",
+    note: "Rekomendasi: Benefit (semakin besar semakin baik)"
+  };
+}
+
+// ============================================================
+// FUZZY RULE FORM MODAL
+// ============================================================
+function FuzzyRuleModal({ isOpen, onClose, indikator, existingRule, rasterInfo, onSave, isSaving }) {
+  const [selectedFuzzy, setSelectedFuzzy] = useState(null);
+  const [error, setError] = useState("");
+
+  // Reset selection saat indikator berubah
+  useEffect(() => {
+    if (indikator) {
+      setSelectedFuzzy(null);
+      setError("");
+    }
+  }, [indikator]);
+
+  if (!isOpen || !indikator) return null;
+
+  const indicatorId = getIndikatorId(indikator);
+  const recommended = getRecommendedFuzzy(indicatorId);
+  const existingFuzzy = existingRule?.fungsi_fuzzy;
+
+  function handleSelect(fuzzy) {
+    setSelectedFuzzy(fuzzy);
+    setError("");
+  }
+
+  function handleSubmit() {
+    if (!selectedFuzzy) {
+      setError("Pilih salah satu fungsi fuzzy terlebih dahulu.");
+      return;
+    }
+
+    onSave({
+      id_indikator: indicatorId,
+      fungsi_fuzzy: selectedFuzzy,
+    });
+  }
+
+  // Tampilkan info raster jika ada
+  const hasRaster = rasterInfo && (rasterInfo.min_value !== null || rasterInfo.max_value !== null);
+  const minVal = rasterInfo?.min_value;
+  const maxVal = rasterInfo?.max_value;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-white rounded-t-3xl border-b border-stone-100 px-6 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-black text-[#1D3557]">Atur Arah Fuzzy</h2>
+            <p className="text-xs text-stone-500 mt-0.5">{indikator.nama_indikator}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl hover:bg-stone-100 transition cursor-pointer"
+          >
+            <X size={20} className="text-stone-400" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 space-y-5">
+          {/* Info Dataset */}
+          {hasRaster ? (
+            <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 size={16} className="text-emerald-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-emerald-800">Dataset Terdeteksi</p>
+                  <p className="text-xs text-emerald-700 mt-1">
+                    Min: <span className="font-bold">{formatValue(minVal)}</span> | Max: <span className="font-bold">{formatValue(maxVal)}</span>
+                  </p>
+                  <p className="text-xs text-emerald-600 mt-1">
+                    Nilai min/max akan digunakan secara otomatis untuk normalisasi.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-amber-50 border border-amber-100 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">Dataset Belum Terdeteksi</p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    Upload dataset raster terlebih dahulu untuk melihat nilai min/max.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Rekomendasi Info */}
+          <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4">
+            <div className="flex items-start gap-3">
+              <Info size={16} className="text-blue-600 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-blue-800">{recommended.note}</p>
+                <button
+                  onClick={() => handleSelect(recommended.fungsi_fuzzy)}
+                  className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                >
+                  <Sparkles size={12} />
+                  Gunakan Rekomendasi
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Status Existing */}
+          {existingFuzzy && existingFuzzy !== selectedFuzzy && (
+            <div className="text-xs text-stone-500 italic">
+              Aturan saat ini: <span className="font-semibold text-stone-700">{existingFuzzy}</span>
+            </div>
+          )}
+
+          {/* Fuzzy Selection */}
+          <div>
+            <label className="block text-sm font-bold text-stone-700 mb-3">
+              Pilih Arah Fuzzy <span className="text-red-500">*</span>
+            </label>
+            <div className="space-y-2">
+              {/* INCREASING */}
+              <button
+                type="button"
+                onClick={() => handleSelect("INCREASING")}
+                className={`w-full p-4 rounded-xl border-2 transition flex items-center gap-4 cursor-pointer ${
+                  selectedFuzzy === "INCREASING"
+                    ? "border-emerald-500 bg-emerald-50"
+                    : "border-stone-200 hover:border-stone-300 bg-white"
+                }`}
+              >
+                <div className={`rounded-xl p-2.5 ${selectedFuzzy === "INCREASING" ? "bg-emerald-100" : "bg-stone-100"}`}>
+                  <TrendingUp size={22} className={selectedFuzzy === "INCREASING" ? "text-emerald-600" : "text-stone-500"} />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-bold text-stone-800">Increasing (Benefit)</p>
+                  <p className="text-xs text-stone-500 mt-0.5">Semakin besar nilai, semakin tinggi skor fuzzy</p>
+                </div>
+                {selectedFuzzy === "INCREASING" && <CheckCircle2 size={20} className="text-emerald-500" />}
+              </button>
+
+              {/* DECREASING */}
+              <button
+                type="button"
+                onClick={() => handleSelect("DECREASING")}
+                className={`w-full p-4 rounded-xl border-2 transition flex items-center gap-4 cursor-pointer ${
+                  selectedFuzzy === "DECREASING"
+                    ? "border-amber-500 bg-amber-50"
+                    : "border-stone-200 hover:border-stone-300 bg-white"
+                }`}
+              >
+                <div className={`rounded-xl p-2.5 ${selectedFuzzy === "DECREASING" ? "bg-amber-100" : "bg-stone-100"}`}>
+                  <TrendingDown size={22} className={selectedFuzzy === "DECREASING" ? "text-amber-600" : "text-stone-500"} />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-bold text-stone-800">Decreasing (Cost)</p>
+                  <p className="text-xs text-stone-500 mt-0.5">Semakin kecil nilai, semakin tinggi skor fuzzy</p>
+                </div>
+                {selectedFuzzy === "DECREASING" && <CheckCircle2 size={20} className="text-amber-500" />}
+              </button>
+
+              {/* NEAR */}
+              <button
+                type="button"
+                onClick={() => handleSelect("NEAR")}
+                className={`w-full p-4 rounded-xl border-2 transition flex items-center gap-4 cursor-pointer ${
+                  selectedFuzzy === "NEAR"
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-stone-200 hover:border-stone-300 bg-white"
+                }`}
+              >
+                <div className={`rounded-xl p-2.5 ${selectedFuzzy === "NEAR" ? "bg-blue-100" : "bg-stone-100"}`}>
+                  <Target size={22} className={selectedFuzzy === "NEAR" ? "text-blue-600" : "text-stone-500"} />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-bold text-stone-800">Near (Optimum)</p>
+                  <p className="text-xs text-stone-500 mt-0.5">Nilai optimum di sekitar midpoint (min+max)/2</p>
+                </div>
+                {selectedFuzzy === "NEAR" && <CheckCircle2 size={20} className="text-blue-500" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Info Proses */}
+          <div className="rounded-xl bg-stone-50 border border-stone-100 p-4 text-xs text-stone-600">
+            <p className="font-semibold text-stone-700 mb-1">ℹ️ Cara Kerja:</p>
+            <ul className="space-y-1 ml-4 list-disc">
+              <li><strong>Increasing:</strong> min/max dari dataset → normalisasi linear naik</li>
+              <li><strong>Decreasing:</strong> min/max dari dataset → normalisasi linear turun</li>
+              <li><strong>Near:</strong> midpoint = (min+max)/2, spread = 0.2 (otomatis)</li>
+            </ul>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="rounded-xl bg-red-50 border border-red-100 p-3 flex items-start gap-2">
+              <AlertTriangle size={16} className="text-red-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-white rounded-b-3xl border-t border-stone-100 px-6 py-4 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 rounded-xl border border-stone-200 text-sm font-semibold text-stone-600 hover:bg-stone-50 transition cursor-pointer"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSaving || !selectedFuzzy}
+            className="flex-1 px-4 py-2.5 rounded-xl bg-[#1D3557] text-white text-sm font-bold hover:bg-[#2c4c78] transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? (
+              <>
+                <RefreshCcw size={16} className="animate-spin" />
+                Menyimpan...
+              </>
+            ) : (
+              <>
+                <Save size={16} />
+                Simpan
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ============================================================
@@ -70,6 +336,11 @@ export default function AdminFuzzyPage() {
   const [selectedId, setSelectedId] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [loadingAll, setLoadingAll] = useState(true);
+
+  // Fuzzy Rule Modal State
+  const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
+  const [editingRuleIndikator, setEditingRuleIndikator] = useState(null);
+  const [isSavingRule, setIsSavingRule] = useState(false);
 
   const [toast, setToast] = useState(null);
   const [modalConfig, setModalConfig] = useState(null);
@@ -178,16 +449,62 @@ export default function AdminFuzzyPage() {
     }));
 
   // ------------------------------------------------------------
+  // FUZZY RULE HANDLERS
+  // ------------------------------------------------------------
+  function handleOpenRuleModal(indikator) {
+    const id = getIndikatorId(indikator);
+    const existingRule = aturanMap[id] || null;
+    const rawRaster = indikator.raster_layers?.find((r) => r.tipe_raster === "RAW");
+    const rasterInfo = rawRaster ? {
+      min_value: rawRaster.min_value,
+      max_value: rawRaster.max_value,
+    } : null;
+    setEditingRuleIndikator({ ...indikator, existingRule, rasterInfo });
+    setIsRuleModalOpen(true);
+  }
+
+  async function handleSaveRule(ruleData) {
+    setIsSavingRule(true);
+    try {
+      await fuzzyService.saveAturan(ruleData);
+      setToast({
+        type: "success",
+        message: "Aturan fuzzy berhasil disimpan.",
+      });
+      setIsRuleModalOpen(false);
+      setEditingRuleIndikator(null);
+      await loadData();
+    } catch (err) {
+      setToast({
+        type: "error",
+        message: err.message || "Gagal menyimpan aturan fuzzy.",
+      });
+    } finally {
+      setIsSavingRule(false);
+    }
+  }
+
+  // ------------------------------------------------------------
   // ACTIONS
   // ------------------------------------------------------------
   async function handleCalculate(id) {
     if (!id) return;
 
+    const indikator = indikatorList.find(ind => getIndikatorId(ind) === id);
+    const hasRaw = indikator?.raster_layers?.some((r) => r.tipe_raster === "RAW");
+
+    if (!hasRaw) {
+      setToast({
+        type: "error",
+        message: "Dataset raster belum diupload. Upload dataset terlebih dahulu.",
+      });
+      return;
+    }
+
     if (!aturanMap[id]) {
       setToast({
         type: "error",
-        message:
-          "Indikator ini belum memiliki aturan fuzzy. Tambahkan aturan fuzzy terlebih dahulu.",
+        message: "Arah fuzzy belum diset. Klik tombol Σ untuk mengatur arah fuzzy terlebih dahulu.",
       });
       return;
     }
@@ -213,11 +530,30 @@ export default function AdminFuzzyPage() {
   }
 
   function handleOpenCalculateAllModal() {
+    // Cek indikator yang belum siap
+    const belumUpload = indikatorList.filter(ind => {
+      if (ind.tipe_nilai === "MASK") return false;
+      return !ind.raster_layers?.some((r) => r.tipe_raster === "RAW");
+    });
+
+    const belumAtur = indikatorList.filter(ind => {
+      if (ind.tipe_nilai === "MASK") return false;
+      const id = getIndikatorId(ind);
+      return ind.raster_layers?.some((r) => r.tipe_raster === "RAW") && !aturanMap[id];
+    });
+
+    let message = "Apakah Anda yakin ingin menjalankan proses fuzzy untuk semua indikator yang sudah siap?";
+    if (belumUpload.length > 0) {
+      message = `${message}\n\n⚠️ ${belumUpload.length} indikator belum upload dataset.`;
+    }
+    if (belumAtur.length > 0) {
+      message = `${message}\n⚠️ ${belumAtur.length} indikator belum atur arah fuzzy.`;
+    }
+
     setModalConfig({
       isOpen: true,
       title: "Konfirmasi Hitung Semua Fuzzy",
-      message:
-        "Apakah Anda yakin ingin menjalankan proses fuzzy untuk semua indikator yang memiliki aturan fuzzy?",
+      message: message,
       variant: "warning",
       onConfirm: executeCalculateAll,
     });
@@ -372,46 +708,47 @@ export default function AdminFuzzyPage() {
             </div>
 
             {selectedAturan ? (
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="rounded-2xl bg-white p-4 border border-stone-100">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                    Fungsi Fuzzy
-                  </p>
-                  <p className="mt-2 text-sm font-extrabold text-[#1D3557]">
-                    {fuzzyLabel(selectedAturan.fungsi_fuzzy)}
-                  </p>
-                </div>
+              <>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="rounded-2xl bg-white p-4 border border-stone-100">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Fungsi Fuzzy
+                    </p>
+                    <p className="mt-2 text-sm font-extrabold text-[#1D3557]">
+                      {fuzzyLabel(selectedAturan.fungsi_fuzzy)}
+                    </p>
+                  </div>
 
-                <div className="rounded-2xl bg-white p-4 border border-stone-100">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                    Arah Preferensi
-                  </p>
-                  <p className="mt-2 text-sm font-extrabold text-[#1D3557]">
-                    {arahLabel(
-                      selectedAturan.arah || selectedIndikator?.arah_preferensi
-                    )}
-                  </p>
-                </div>
+                  <div className="rounded-2xl bg-white p-4 border border-stone-100">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Arah Preferensi
+                    </p>
+                    <p className="mt-2 text-sm font-extrabold text-[#1D3557]">
+                      {arahLabel(
+                        selectedAturan.arah || selectedIndikator?.arah_preferensi
+                      )}
+                    </p>
+                  </div>
 
-                <div className="rounded-2xl bg-white p-4 border border-stone-100">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                    Nilai Min
-                  </p>
-                  <p className="mt-2 text-sm font-extrabold text-[#1D3557]">
-                    {formatValue(selectedAturan.nilai_min)}
-                  </p>
-                </div>
+                  <div className="rounded-2xl bg-white p-4 border border-stone-100">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Nilai Min
+                    </p>
+                    <p className="mt-2 text-sm font-extrabold text-[#1D3557]">
+                      {formatValue(selectedAturan.nilai_min)}
+                    </p>
+                  </div>
 
-                <div className="rounded-2xl bg-white p-4 border border-stone-100">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                    Nilai Max
-                  </p>
-                  <p className="mt-2 text-sm font-extrabold text-[#1D3557]">
-                    {formatValue(selectedAturan.nilai_max)}
-                  </p>
-                </div>
+                  <div className="rounded-2xl bg-white p-4 border border-stone-100">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Nilai Max
+                    </p>
+                    <p className="mt-2 text-sm font-extrabold text-[#1D3557]">
+                      {formatValue(selectedAturan.nilai_max)}
+                    </p>
+                  </div>
 
-                {selectedAturan.midpoint !== null &&
+                  {selectedAturan.midpoint !== null &&
                   selectedAturan.midpoint !== undefined && (
                     <div className="rounded-2xl bg-white p-4 border border-stone-100">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
@@ -434,17 +771,46 @@ export default function AdminFuzzyPage() {
                       </p>
                     </div>
                   )}
-              </div>
-            ) : (
-              <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50/70 p-4 text-sm leading-6 text-amber-900">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-                  <p>
-                    Indikator ini belum memiliki aturan fuzzy di database.
-                    Tambahkan aturan fuzzy terlebih dahulu agar tombol proses
-                    dapat digunakan.
-                  </p>
                 </div>
+
+                {/* Tombol Edit Aturan */}
+                {selectedIndikator && selectedIndikator.tipe_nilai !== "MASK" && (
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenRuleModal(selectedIndikator)}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#1D3557] px-4 py-2 text-xs font-bold text-white hover:bg-[#2c4c78] transition cursor-pointer"
+                    >
+                      <Sigma size={14} />
+                      {selectedAturan ? "Edit Aturan Fuzzy" : "Tambah Aturan Fuzzy"}
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="mt-5 space-y-3">
+                <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4 text-sm leading-6 text-amber-900">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                    <p>
+                      Indikator ini belum memiliki aturan fuzzy di database.
+                      Tambahkan aturan fuzzy terlebih dahulu agar tombol proses
+                      dapat digunakan.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tombol Tambah Aturan */}
+                {selectedIndikator && selectedIndikator.tipe_nilai !== "MASK" && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenRuleModal(selectedIndikator)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white hover:bg-amber-700 transition cursor-pointer"
+                  >
+                    <Sigma size={14} />
+                    Tambah Aturan Fuzzy
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -592,9 +958,10 @@ export default function AdminFuzzyPage() {
             <table className="w-full table-fixed text-left text-xs">
               <colgroup>
                 <col className="w-16" />
-                <col className="w-[38%]" />
-                <col className="w-[22%]" />
-                <col className="w-[20%]" />
+                <col className="w-[32%]" />
+                <col className="w-[18%]" />
+                <col className="w-[18%]" />
+                <col className="w-20" />
                 <col className="w-24" />
               </colgroup>
 
@@ -604,6 +971,7 @@ export default function AdminFuzzyPage() {
                   <th className="px-6 py-4">INDIKATOR</th>
                   <th className="px-6 py-4">TIPE FUZZY</th>
                   <th className="px-6 py-4">STATUS</th>
+                  <th className="px-6 py-4 text-center">ATURAN</th>
                   <th className="px-6 py-4 text-right">PROSES</th>
                 </tr>
               </thead>
@@ -612,7 +980,7 @@ export default function AdminFuzzyPage() {
                 {loadingAll ? (
                   <tr>
                     <td
-                      colSpan="5"
+                      colSpan="6"
                       className="px-6 py-12 text-center text-xs font-semibold text-stone-400 bg-white"
                     >
                       Memuat data...
@@ -621,7 +989,7 @@ export default function AdminFuzzyPage() {
                 ) : indikatorList.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="5"
+                      colSpan="6"
                       className="px-6 py-12 text-center text-xs font-semibold text-stone-400 bg-white"
                     >
                       Belum ada indikator terdaftar.
@@ -632,7 +1000,7 @@ export default function AdminFuzzyPage() {
                     <Fragment key={group.id}>
                       <tr className="bg-amber-50/15">
                         <td
-                          colSpan="5"
+                          colSpan="6"
                           className="px-6 py-3 text-xs font-bold text-amber-600 bg-amber-50/5 border-y border-stone-100/50"
                         >
                           <span className="flex items-center gap-2">
@@ -746,6 +1114,23 @@ export default function AdminFuzzyPage() {
                               })()}
                             </td>
 
+                            {/* Kolom Aturan */}
+                            <td className="px-6 py-4 text-center">
+                              {!isMask && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleOpenRuleModal(indikator);
+                                  }}
+                                  className="rounded-lg p-1.5 transition active:scale-90 text-stone-400 hover:text-[#1D3557] hover:bg-stone-100 cursor-pointer"
+                                  title={aturan ? "Edit Aturan" : "Tambah Aturan"}
+                                >
+                                  <Sigma size={15} />
+                                </button>
+                              )}
+                            </td>
+
                             <td className="px-6 py-4 text-right">
                               <button
                                 type="button"
@@ -760,7 +1145,7 @@ export default function AdminFuzzyPage() {
                                   }`}
                                 title={hasRaw ? "Hitung Fuzzy" : "Upload dataset terlebih dahulu"}
                               >
-                                <Sigma size={15} />
+                                <RefreshCcw size={15} />
                               </button>
                             </td>
                           </tr>
@@ -774,6 +1159,20 @@ export default function AdminFuzzyPage() {
           </div>
         </Card>
       </div>
+
+      {/* MODAL ATURAN FUZZY */}
+      <FuzzyRuleModal
+        isOpen={isRuleModalOpen}
+        onClose={() => {
+          setIsRuleModalOpen(false);
+          setEditingRuleIndikator(null);
+        }}
+        indikator={editingRuleIndikator}
+        existingRule={editingRuleIndikator?.existingRule}
+        rasterInfo={editingRuleIndikator?.rasterInfo}
+        onSave={handleSaveRule}
+        isSaving={isSavingRule}
+      />
 
       {/* MODAL KONFIRMASI */}
       {modalConfig && (

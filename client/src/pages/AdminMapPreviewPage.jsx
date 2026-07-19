@@ -114,7 +114,7 @@ export default function AdminMapPreviewPage() {
               </div>
             </div>
           </Card>
-          <Legend />
+          <Legend geojson={geojson} />
         </aside>
       </div>
 

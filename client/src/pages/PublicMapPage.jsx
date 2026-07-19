@@ -10,6 +10,7 @@ import { mapService } from "../services/mapService";
 import { kriteriaService } from "../services/api/kriteriaService";
 import { indikatorService } from "../services/api/indikatorService";
 import { wlcService } from "../services/api/wlcService";
+import { getJenksBreaks } from "../utils/jenks";
 
 function getArrayData(data) {
   if (Array.isArray(data)) return data;
@@ -194,16 +195,43 @@ export default function PublicMapPage() {
               const isConstrained = scores.sawah === 0 || scores.sempadan_sungai === 0;
               const finalScore = isConstrained ? 0.0 : rawScore;
               
+              f.properties.scoreUsed = finalScore;
+              f.properties.isConstrained = isConstrained;
+              return f;
+            });
+
+            // Extract valid scores for Jenks Breaks calculation
+            const validScores = customData.features
+              .filter((f) => !f.properties.isConstrained && f.properties.scoreUsed > 0)
+              .map((f) => f.properties.scoreUsed);
+
+            let break1 = 0.333333;
+            let break2 = 0.666667;
+
+            if (validScores.length >= 3) {
+              const breaks = getJenksBreaks(validScores, 3);
+              if (breaks && breaks.length === 4) {
+                break1 = breaks[1];
+                break2 = breaks[2];
+              }
+            }
+
+            // Assign final suitability class based on breaks
+            customData.features = customData.features.map((f) => {
+              const score = f.properties.scoreUsed;
+              const isConstrained = f.properties.isConstrained;
+              
               let suitabilityClass = "Kurang Sesuai";
-              if (!isConstrained && finalScore >= 0.333333) {
-                if (finalScore >= 0.666667) {
-                  suitabilityClass = "Sesuai";
-                } else {
+              if (!isConstrained && score > 0) {
+                if (score <= break1) {
+                  suitabilityClass = "Kurang Sesuai";
+                } else if (score <= break2) {
                   suitabilityClass = "Cukup Sesuai";
+                } else {
+                  suitabilityClass = "Sesuai";
                 }
               }
               
-              f.properties.scoreUsed = finalScore;
               f.properties.suitabilityClass = suitabilityClass;
               return f;
             });
@@ -368,7 +396,7 @@ export default function PublicMapPage() {
                   criteriaList={criteriaList}
                   indicatorList={indicatorList}
                 />
-                <Legend />
+                <Legend geojson={geojson} />
               </aside>
             </div>
 

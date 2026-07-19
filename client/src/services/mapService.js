@@ -1,5 +1,22 @@
 import { wlcService } from "./api/wlcService";
 import { ahpService } from "./api/ahpService";
+import { getJenksBreaks } from "../utils/jenks";
+
+const indicatorIdToKey = {
+  1: "kepadatan_layanan_makan_non_coffee",
+  2: "kepadatan_layanan_olahraga_rekreasi",
+  3: "kepadatan_hunian",
+  4: "kedekatan_pusat_belanja",
+  5: "kepadatan_kampus_fasilitas_pendidikan",
+  6: "kepadatan_kantor_jasa_keuangan_bisnis",
+  7: "intensitas_cahaya_malam",
+  8: "kepadatan_populasi",
+  9: "jarak_jalan_utama",
+  10: "kedekatan_simpul_transportasi",
+  11: "kepadatan_simpang_jalan",
+  12: "kepadatan_coffee_shop_existing",
+  13: "jarak_coffee_shop_existing_terdekat",
+};
 
 export const mapService = {
   async getDefaultMap() {
@@ -84,7 +101,11 @@ export const mapService = {
           let scoreSum = 0;
           let weightSum = 0;
           
-          for (const [indKey, weightVal] of Object.entries(weights)) {
+          for (const [indIdStr, weightVal] of Object.entries(weights)) {
+            const indId = Number(indIdStr);
+            const indKey = indicatorIdToKey[indId];
+            if (!indKey) continue;
+            
             const fuzzyVal = scores["fuzzy_" + indKey] ?? 0;
             scoreSum += fuzzyVal * weightVal;
             weightSum += weightVal;
@@ -94,16 +115,43 @@ export const mapService = {
           const isConstrained = scores.sawah === 0 || scores.sempadan_sungai === 0;
           const finalScore = isConstrained ? 0.0 : rawScore;
           
+          f.properties.scoreUsed = finalScore;
+          f.properties.isConstrained = isConstrained;
+          return f;
+        });
+
+        // Extract valid scores for Jenks Breaks calculation
+        const validScores = grids.features
+          .filter((f) => !f.properties.isConstrained && f.properties.scoreUsed > 0)
+          .map((f) => f.properties.scoreUsed);
+
+        let break1 = 0.333333;
+        let break2 = 0.666667;
+
+        if (validScores.length >= 3) {
+          const breaks = getJenksBreaks(validScores, 3);
+          if (breaks && breaks.length === 4) {
+            break1 = breaks[1];
+            break2 = breaks[2];
+          }
+        }
+
+        // Assign final suitability class based on breaks
+        grids.features = grids.features.map((f) => {
+          const score = f.properties.scoreUsed;
+          const isConstrained = f.properties.isConstrained;
+          
           let suitabilityClass = "Kurang Sesuai";
-          if (!isConstrained && finalScore >= 0.333333) {
-            if (finalScore >= 0.666667) {
-              suitabilityClass = "Sesuai";
-            } else {
+          if (!isConstrained && score > 0) {
+            if (score <= break1) {
+              suitabilityClass = "Kurang Sesuai";
+            } else if (score <= break2) {
               suitabilityClass = "Cukup Sesuai";
+            } else {
+              suitabilityClass = "Sesuai";
             }
           }
           
-          f.properties.scoreUsed = finalScore;
           f.properties.suitabilityClass = suitabilityClass;
           return f;
         });
