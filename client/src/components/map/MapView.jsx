@@ -1,14 +1,19 @@
 import { GeoJSON, MapContainer, TileLayer } from "react-leaflet";
 import { getSuitabilityColor } from "../../utils/mapStyle";
 
-export default function MapView({ geojson, boundaryGeojson, selectedGridCode, onSelectGrid }) {
+export default function MapView({ geojson, boundaryGeojson, selectedGridCode, onSelectGrid, indicatorList = [] }) {
   if (!geojson) {
     return (
-      <div className="flex h-full items-center justify-center text-stone-500">
-        Memuat peta dummy...
+      <div className="flex h-full flex-col items-center justify-center text-stone-500 font-sans p-6 text-center">
+        <span className="text-3xl">🗺️</span>
+        <p className="mt-2 font-semibold text-stone-700">Peta WLC Belum Tersedia</p>
+        <p className="mt-1 text-xs text-stone-400 max-w-xs">Kalkulasi WLC aktif belum dijalankan oleh administrator atau data masih kosong.</p>
       </div>
     );
   }
+
+  const maskIndicators = indicatorList.filter(ind => ind.tipe_nilai === "MASK" || ind.tipeNilai === "MASK");
+  const maskKeys = maskIndicators.map(ind => "ind_" + ind.id);
 
   return (
     <MapContainer center={[-8.165, 113.72]} zoom={13} scrollWheelZoom className="h-full w-full rounded-3xl">
@@ -39,7 +44,10 @@ export default function MapView({ geojson, boundaryGeojson, selectedGridCode, on
         data={geojson}
         style={(feature) => {
           const isSelected = selectedGridCode === feature.properties.gridCode;
-          const isConstrained = feature.properties.indicatorScores?.sawah === 0 || feature.properties.indicatorScores?.sempadan_sungai === 0;
+          const scores = feature.properties.indicatorScores || {};
+          const isConstrained = maskKeys.length > 0
+            ? maskKeys.some(key => scores[key] === 0 || scores["fuzzy_" + key] === 0)
+            : (scores.sawah === 0 || scores.sempadan_sungai === 0 || scores.ind_14 === 0 || scores.ind_15 === 0);
 
           return {
             color: isSelected ? "#7c2d12" : "#ffffff",
@@ -49,10 +57,22 @@ export default function MapView({ geojson, boundaryGeojson, selectedGridCode, on
           };
         }}
         onEachFeature={(feature, layer) => {
-          const isConstrained = feature.properties.indicatorScores?.sawah === 0 || feature.properties.indicatorScores?.sempadan_sungai === 0;
-          const constraintText = isConstrained 
-            ? `<br/><span class="text-xs text-red-600 font-semibold font-mono">⚠️ Terkena Constraint:${feature.properties.indicatorScores?.sawah === 0 ? " [Sawah]" : ""}${feature.properties.indicatorScores?.sempadan_sungai === 0 ? " [Sempadan Sungai]" : ""}</span>`
-            : "";
+          const scores = feature.properties.indicatorScores || {};
+          const isConstrained = maskKeys.length > 0
+            ? maskKeys.some(key => scores[key] === 0 || scores["fuzzy_" + key] === 0)
+            : (scores.sawah === 0 || scores.sempadan_sungai === 0 || scores.ind_14 === 0 || scores.ind_15 === 0);
+
+          let constraintText = "";
+          if (isConstrained) {
+            if (maskKeys.length > 0) {
+              const violatedNames = maskIndicators
+                .filter(ind => scores["ind_" + ind.id] === 0 || scores["fuzzy_ind_" + ind.id] === 0)
+                .map(ind => ind.name);
+              constraintText = `<br/><span class="text-xs text-red-600 font-semibold font-mono">⚠️ Terkena Constraint: [${violatedNames.join(", ")}]</span>`;
+            } else {
+              constraintText = `<br/><span class="text-xs text-red-600 font-semibold font-mono">⚠️ Terkena Constraint:${scores.sawah === 0 ? " [Sawah]" : ""}${scores.sempadan_sungai === 0 ? " [Sempadan Sungai]" : ""}</span>`;
+            }
+          }
 
           layer.bindPopup(`
             <div class="font-sans text-xs">

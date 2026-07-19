@@ -9,6 +9,7 @@ import ValidationMapView from "../components/map/ValidationMapView";
 import { wlcService } from "../services/api/wlcService";
 import { getSuitabilityColor } from "../utils/mapStyle";
 import GridDetailPanel from "../components/map/GridDetailPanel";
+import { indikatorService } from "../services/api/indikatorService";
 
 export default function AdminValidationPage() {
   const [gridGeojson, setGridGeojson] = useState(null);
@@ -20,6 +21,7 @@ export default function AdminValidationPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(null);
   const [error, setError] = useState(null);
+  const [indicatorList, setIndicatorList] = useState([]);
   const [activeSampleTab, setActiveSampleTab] = useState("kepadatan_tinggi");
 
   async function loadValidationData() {
@@ -28,17 +30,21 @@ export default function AdminValidationPage() {
       setError(null);
 
       // Ambil seluruh data spasial dan stats secara paralel
-      const [grids, points, stats, boundary] = await Promise.all([
+      const [grids, points, stats, boundary, indicators] = await Promise.all([
         wlcService.getGrids(),
         wlcService.getValidationPoints(),
         wlcService.getValidationStats(),
-        wlcService.getBoundary().catch(() => null)
+        wlcService.getBoundary().catch(() => null),
+        indikatorService.getAll().catch(() => null)
       ]);
 
       setGridGeojson(grids);
       setCoffeePoints(points);
       setValidationStats(stats);
       setBoundaryGeojson(boundary);
+      if (indicators && indicators.data_indikator) {
+        setIndicatorList(indicators.data_indikator);
+      }
       
       // Pilih default grid pertama dari sampel jika ada
       if (stats?.sampel_grid?.kepadatan_tinggi?.length > 0) {
@@ -262,6 +268,7 @@ export default function AdminValidationPage() {
                 }).length || 0
               });
             }}
+            indicatorList={indicatorList}
           />
         </div>
 
@@ -287,7 +294,7 @@ export default function AdminValidationPage() {
 
       {/* Detail Inspeksi Lengkap */}
       <div className="mb-6">
-        <GridDetailPanel selectedGrid={formatGridForDetail(selectedGrid)} />
+        <GridDetailPanel selectedGrid={formatGridForDetail(selectedGrid)} indicatorList={indicatorList} />
       </div>
 
       {/* 4. Classification Validation Cards */}

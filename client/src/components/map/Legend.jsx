@@ -8,7 +8,7 @@ const legendOrder = [
   "Kurang Sesuai",
 ];
 
-export default function Legend({ geojson }) {
+export default function Legend({ geojson, indicatorList = [] }) {
   const classRanges = useMemo(() => {
     if (!geojson?.features) {
       return {
@@ -17,6 +17,10 @@ export default function Legend({ geojson }) {
         "Sesuai": "Skor tinggi",
       };
     }
+
+    const maskIndicatorKeys = indicatorList
+      .filter(ind => ind.tipe_nilai === "MASK" || ind.tipeNilai === "MASK")
+      .map(ind => "ind_" + ind.id);
 
     const ranges = {
       "Kurang Sesuai": { min: Infinity, max: -Infinity },
@@ -27,10 +31,13 @@ export default function Legend({ geojson }) {
     geojson.features.forEach((feature) => {
       const className = feature.properties.suitabilityClass;
       const score = feature.properties.scoreUsed ?? feature.properties.scoreDefault ?? 0;
+      const scores = feature.properties.indicatorScores || {};
+      
       const isConstrained =
         feature.properties.isConstrained ??
-        (feature.properties.indicatorScores?.sawah === 0 ||
-         feature.properties.indicatorScores?.sempadan_sungai === 0);
+        (maskIndicatorKeys.length > 0
+          ? maskIndicatorKeys.some(key => scores[key] === 0 || scores["fuzzy_" + key] === 0)
+          : (scores.sawah === 0 || scores.sempadan_sungai === 0 || scores.ind_14 === 0 || scores.ind_15 === 0));
 
       if (ranges[className]) {
         if (!isConstrained && score > 0) {

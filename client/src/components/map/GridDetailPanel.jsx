@@ -1,6 +1,6 @@
 import Badge from "../common/Badge";
 import Card from "../common/Card";
-import { indicators } from "../../data/indicators";
+import { indicators as staticIndicators } from "../../data/indicators";
 import { getSuitabilityBadgeClass } from "../../utils/mapStyle";
 
 const codeMapping = {
@@ -19,12 +19,12 @@ const codeMapping = {
   jarak_pesaing: "jarak_coffee_shop_existing_terdekat",
 };
 
-export default function GridDetailPanel({ selectedGrid }) {
+export default function GridDetailPanel({ selectedGrid, indicatorList = [] }) {
   if (!selectedGrid) {
     return (
       <Card className="p-4">
-        <h3 className="font-semibold text-stone-900">Detail Lokasi</h3>
-        <p className="mt-2 text-sm text-stone-500">
+        <h3 className="font-semibold text-stone-900 font-sans">Detail Lokasi</h3>
+        <p className="mt-2 text-sm text-stone-500 font-sans">
           Klik salah satu grid pada peta untuk melihat detail skor lokasi, kelas kesesuaian, dan kontribusi indikator.
         </p>
       </Card>
@@ -35,15 +35,42 @@ export default function GridDetailPanel({ selectedGrid }) {
   const percentageScore = Math.round(score * 100);
   const scores = selectedGrid.indicatorScores || {};
 
+  const hasDynamic = indicatorList && indicatorList.length > 0;
+
+  const constraintIndicators = hasDynamic
+    ? indicatorList.filter(ind => ind.tipe_nilai === "MASK" || ind.tipeNilai === "MASK")
+    : [
+        { id: "sawah", name: "Lahan Sawah", code: "sawah" },
+        { id: "sempadan_sungai", name: "Sungai", code: "sempadan_sungai" }
+      ];
+
+  const normalIndicators = hasDynamic
+    ? indicatorList.filter(ind => ind.tipe_nilai !== "MASK" && ind.tipeNilai !== "MASK")
+    : staticIndicators;
+
+  const getBackendKey = (item) => {
+    if (hasDynamic) {
+      return "ind_" + item.id;
+    }
+    return codeMapping[item.code] || item.code;
+  };
+
+  const getConstraintKey = (item) => {
+    if (hasDynamic) {
+      return "ind_" + item.id;
+    }
+    return item.code;
+  };
+
   return (
     <Card className="p-5">
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Kolom 1: Detail & Status Constraint */}
-        <div className="space-y-4">
+        <div className="space-y-4 font-sans">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Detail Lokasi</p>
-              <h3 className="mt-1 text-xl font-bold text-stone-950">{selectedGrid.gridCode}</h3>
+              <h3 className="mt-1 text-xl font-bold text-stone-950 font-sans">{selectedGrid.gridCode}</h3>
             </div>
             <span className={`rounded-full border px-3 py-1 text-xs font-bold ${getSuitabilityBadgeClass(selectedGrid.suitabilityClass)}`}>
               {selectedGrid.suitabilityClass}
@@ -52,63 +79,65 @@ export default function GridDetailPanel({ selectedGrid }) {
 
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-2xl bg-stone-50 p-3">
-              <p className="text-xs text-stone-500">Kecamatan</p>
-              <p className="font-semibold text-stone-900">{selectedGrid.kecamatan || "-"}</p>
+              <p className="text-xs text-stone-500 font-sans">Kecamatan</p>
+              <p className="font-semibold text-stone-900 font-sans">{selectedGrid.kecamatan || "-"}</p>
             </div>
             <div className="rounded-2xl bg-stone-50 p-3">
-              <p className="text-xs text-stone-500">Kelurahan</p>
-              <p className="font-semibold text-stone-900">{selectedGrid.kelurahan || "-"}</p>
+              <p className="text-xs text-stone-500 font-sans">Kelurahan</p>
+              <p className="font-semibold text-stone-900 font-sans">{selectedGrid.kelurahan || "-"}</p>
             </div>
           </div>
 
           <div className="rounded-2xl bg-amber-50 p-4">
             <div className="flex items-center justify-between text-sm">
-              <span className="font-medium text-amber-900">Skor WLC</span>
-              <span className="text-2xl font-bold text-amber-900">{score.toFixed(4)}</span>
+              <span className="font-medium text-amber-900 font-sans">Skor WLC</span>
+              <span className="text-2xl font-bold text-amber-900 font-mono">{score.toFixed(4)}</span>
             </div>
             <div className="mt-3 h-2 rounded-full bg-white">
               <div className="h-2 rounded-full bg-amber-800" style={{ width: `${percentageScore}%` }} />
             </div>
-            <p className="mt-2 text-[10px] text-amber-950/80 leading-relaxed">
+            <p className="mt-2 text-[10px] text-amber-950/80 leading-relaxed font-sans">
               Skor skala 0-1. S = Σ(Wi × Xi) × C, dengan Wi bobot AHP, Xi nilai fuzzy, dan C constraint (0=melanggar, 1=aman).
             </p>
           </div>
 
           {/* Constraints Status */}
-          <div className="space-y-2">
+          <div className="space-y-2 font-sans">
             <p className="text-xs font-semibold text-stone-700">Status Pembatas Lahan (Constraint)</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className={`rounded-xl p-2.5 border flex flex-col justify-between ${scores.sawah === 0 ? "border-red-200 bg-red-50 text-red-700" : "border-stone-200 bg-stone-50 text-stone-600"}`}>
-                <span className="text-[10px] uppercase font-semibold">Lahan Sawah</span>
-                <span className="mt-1 font-bold">{scores.sawah === 0 ? "⚠️ Melanggar" : "✅ Aman"}</span>
-              </div>
-              <div className={`rounded-xl p-2.5 border flex flex-col justify-between ${scores.sempadan_sungai === 0 ? "border-red-200 bg-red-50 text-red-700" : "border-stone-200 bg-stone-50 text-stone-600"}`}>
-                <span className="text-[10px] uppercase font-semibold">Sungai</span>
-                <span className="mt-1 font-bold">{scores.sempadan_sungai === 0 ? "⚠️ Melanggar" : "✅ Aman"}</span>
-              </div>
+              {constraintIndicators.map((item) => {
+                const key = getConstraintKey(item);
+                const isViolated = scores[key] === 0 || scores["fuzzy_" + key] === 0;
+                return (
+                  <div key={item.id} className={`rounded-xl p-2.5 border flex flex-col justify-between ${isViolated ? "border-red-200 bg-red-50 text-red-700" : "border-stone-200 bg-stone-50 text-stone-600"}`}>
+                    <span className="text-[10px] uppercase font-semibold font-sans">{item.name}</span>
+                    <span className="mt-1 font-bold font-sans">{isViolated ? "⚠️ Melanggar" : "✅ Aman"}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
 
         {/* Kolom 2 & 3: Indicators List (Tampil 2-Column Grid) */}
-        <div className="lg:col-span-2 space-y-3">
+        <div className="lg:col-span-2 space-y-3 font-sans">
           <div className="flex items-center justify-between border-b border-stone-100 pb-2">
-            <p className="text-xs font-semibold text-stone-700 font-bold">Nilai & Fuzzy Indikator</p>
-            <span className="text-[10px] text-stone-400 font-medium">13 Indikator</span>
+            <p className="text-xs font-semibold text-stone-700 font-bold font-sans">Nilai & Fuzzy Indikator</p>
+            <span className="text-[10px] text-stone-400 font-medium font-sans">{normalIndicators.length} Indikator</span>
           </div>
 
           <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 max-h-[38vh] lg:max-h-none overflow-y-auto pr-1">
-            {indicators.map((item) => {
-              const backendKey = codeMapping[item.code] || item.code;
+            {normalIndicators.map((item) => {
+              const backendKey = getBackendKey(item);
               const rawVal = scores[backendKey] !== undefined ? scores[backendKey] : "-";
               const fuzzyVal = scores["fuzzy_" + backendKey] !== undefined ? scores["fuzzy_" + backendKey] : "-";
               const bobotVal = scores["bobot_" + backendKey] !== undefined ? scores["bobot_" + backendKey] : "-";
               const terbobotVal = scores["terbobot_" + backendKey] !== undefined ? scores["terbobot_" + backendKey] : "-";
 
               return (
-                <div key={item.code} className="text-xs flex flex-col gap-1.5 border-b border-stone-100 pb-2">
+                <div key={item.id || item.code} className="text-xs flex flex-col gap-1.5 border-b border-stone-100 pb-2">
                   <div className="flex justify-between items-start">
-                    <span className="font-semibold text-stone-850 leading-tight pr-2">{item.name}</span>
+                    <span className="font-semibold text-stone-850 leading-tight pr-2 font-sans">{item.name}</span>
                     <span className="shrink-0 text-[10px] font-mono rounded bg-stone-100 px-1.5 py-0.5 text-stone-600 font-bold">
                       Fuzzy: <span className="text-stone-950 font-bold">{typeof fuzzyVal === "number" ? fuzzyVal.toFixed(3) : fuzzyVal}</span>
                     </span>
@@ -116,7 +145,7 @@ export default function GridDetailPanel({ selectedGrid }) {
                   <div className="grid grid-cols-3 gap-2 bg-stone-50 rounded-lg p-1.5 text-[10px] text-stone-650 font-mono">
                     <div>
                       <span className="text-[9px] uppercase text-stone-400 block font-sans">Nilai Asli</span>
-                      <span className="font-bold text-stone-800">{rawVal}</span> <span className="text-[8px] text-stone-400 font-sans">{item.unit}</span>
+                      <span className="font-bold text-stone-800">{rawVal}</span> <span className="text-[8px] text-stone-400 font-sans">{item.unit || ""}</span>
                     </div>
                     <div className="border-l border-stone-200 pl-2">
                       <span className="text-[9px] uppercase text-stone-400 block font-sans">Bobot AHP</span>

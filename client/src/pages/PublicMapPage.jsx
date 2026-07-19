@@ -145,24 +145,38 @@ export default function PublicMapPage() {
   const loadInitialMap = async () => {
     try {
       setLoading(true);
-      const [defaultData, kriteriaData, indikatorData, boundary] = await Promise.all([
-        mapService.getDefaultMap(), // Always load default database map as baseline
+      const [defaultData, kriteriaData, indikatorData, boundary, activeWlc] = await Promise.all([
+        mapService.getDefaultMap().catch(() => null),
         kriteriaService.getAll(),
         indikatorService.getAll(),
         wlcService.getBoundary().catch(() => null),
+        wlcService.getActive().catch(() => null),
       ]);
       
+      const rawIndikator = getArrayData(indikatorData);
+      const maskCriteriaIds = rawIndikator
+        .filter(item => item.tipe_nilai === "MASK" || item.tipeNilai === "MASK")
+        .map(item => item.id_kriteria ?? item.kriteria?.id_kriteria ?? item.criteriaId);
+
       const mappedKriteria = getArrayData(kriteriaData)
         .map(mapKriteriaItem)
-        .filter((item) => item.id !== 6 && item.code !== "6")
+        .filter((item) => !maskCriteriaIds.includes(item.id))
         .sort((a, b) => a.urutan - b.urutan);
 
-      const mappedIndikator = getArrayData(indikatorData)
+      const mappedIndikator = rawIndikator
         .map(mapIndikatorItem)
-        .filter((item) => item.criteriaId !== 6 && item.criteriaCode !== "6")
+        .filter((item) => !maskCriteriaIds.includes(item.criteriaId))
         .sort((a, b) => a.urutan - b.urutan);
 
-      setDefaultGeojson(defaultData);
+      const publishedVersion = window.localStorage.getItem("wlc_map_published_version");
+      const isPublished = activeWlc && defaultData && publishedVersion === String(activeWlc.versi);
+
+      if (isPublished) {
+        setDefaultGeojson(defaultData);
+      } else {
+        setDefaultGeojson(null);
+      }
+
       setCriteriaList(mappedKriteria);
       setIndicatorList(mappedIndikator);
       setBoundaryGeojson(boundary);
@@ -176,6 +190,9 @@ export default function PublicMapPage() {
             const weights = customAhp.globalIndicatorWeights;
             const customData = JSON.parse(JSON.stringify(defaultData));
             
+            const maskInds = getArrayData(indikatorData).filter(ind => ind.tipe_nilai === "MASK" || ind.tipeNilai === "MASK");
+            const maskKeys = maskInds.map(ind => "ind_" + (ind.id_indikator ?? ind.id));
+
             customData.features = customData.features.map((f) => {
               const scores = f.properties.indicatorScores || {};
               let scoreSum = 0;
@@ -183,8 +200,7 @@ export default function PublicMapPage() {
               
               for (const [indIdStr, weightVal] of Object.entries(weights)) {
                 const indId = Number(indIdStr);
-                const indKey = indicatorIdToKey[indId];
-                if (!indKey) continue;
+                const indKey = "ind_" + indId;
                 
                 const fuzzyVal = scores["fuzzy_" + indKey] ?? 0;
                 scoreSum += fuzzyVal * weightVal;
@@ -192,7 +208,9 @@ export default function PublicMapPage() {
               }
               
               const rawScore = weightSum > 0 ? scoreSum / weightSum : scoreSum;
-              const isConstrained = scores.sawah === 0 || scores.sempadan_sungai === 0;
+              const isConstrained = maskKeys.length > 0
+                ? maskKeys.some(key => scores[key] === 0)
+                : (scores.sawah === 0 || scores.sempadan_sungai === 0 || scores.ind_14 === 0 || scores.ind_15 === 0);
               const finalScore = isConstrained ? 0.0 : rawScore;
               
               f.properties.scoreUsed = finalScore;
@@ -358,15 +376,19 @@ export default function PublicMapPage() {
             Memuat peta rekomendasi spasial...
           </div>
         ) : !geojson ? (
-          <div className="flex h-[50vh] items-center justify-center rounded-3xl border border-stone-200 bg-white text-stone-500">
-            Peta belum tersedia. Silakan coba lagi nanti.
+          <div className="flex h-[50vh] flex-col items-center justify-center rounded-3xl border border-stone-200 bg-white text-stone-500 p-8 text-center font-sans">
+            <span className="text-4xl mb-3">🗺️</span>
+            <h3 className="text-lg font-bold text-stone-900 font-sans">Peta Rekomendasi Belum Tersedia</h3>
+            <p className="mt-2 max-w-sm text-sm text-stone-500 leading-relaxed font-sans">
+              Kalkulasi WLC aktif belum dijalankan oleh administrator atau data masih dikosongkan. Silakan hubungi admin untuk melakukan perhitungan lokasi.
+            </p>
           </div>
         ) : (
           <>
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
               <div className="space-y-3">
                 <div className="h-[72vh] overflow-hidden rounded-3xl border border-stone-200 bg-white p-2 shadow-sm">
-                  <MapView geojson={geojson} boundaryGeojson={boundaryGeojson} selectedGridCode={selectedGrid?.gridCode} onSelectGrid={setSelectedGrid} />
+                  <MapView geojson={geojson} boundaryGeojson={boundaryGeojson} selectedGridCode={selectedGrid?.gridCode} onSelectGrid={setSelectedGrid} indicatorList={indicatorList} />
                 </div>
 
                 {!selectedGrid && (
@@ -396,14 +418,14 @@ export default function PublicMapPage() {
                   criteriaList={criteriaList}
                   indicatorList={indicatorList}
                 />
-                <Legend geojson={geojson} />
+                <Legend geojson={geojson} indicatorList={indicatorList} />
               </aside>
             </div>
 
             {/* Detail grid hanya muncul di bawah peta setelah salah satu grid diklik */}
             {selectedGrid && (
               <div className="mt-4">
-                <GridDetailPanel selectedGrid={selectedGrid} />
+                <GridDetailPanel selectedGrid={selectedGrid} indicatorList={indicatorList} />
               </div>
             )}
           </>

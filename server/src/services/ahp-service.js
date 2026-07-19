@@ -90,6 +90,14 @@ class AHPService {
   }
 
   static async getBobotKonsensus() {
+    // Cari semua kriteria/indikator constraint secara dinamis
+    const constraintIndicators = await prisma.indikator.findMany({
+      where: { tipe_nilai: "MASK" },
+      select: { id_indikator: true, id_kriteria: true },
+    });
+    const constraintIndIds = constraintIndicators.map((i) => i.id_indikator);
+    const constraintCritIds = [...new Set(constraintIndicators.map((i) => i.id_kriteria))];
+
     const [pakarList, bobotKriteriaSemuaPakar, bobotIndikatorSemuaPakar] =
       await Promise.all([
         prisma.pakar.findMany({
@@ -104,7 +112,7 @@ class AHPService {
 
         prisma.bobotKriteria.findMany({
           where: {
-            NOT: { id_kriteria: 6 },
+            NOT: { id_kriteria: { in: constraintCritIds } },
           },
           include: {
             kriteria: { select: { nama_kriteria: true } },
@@ -118,7 +126,7 @@ class AHPService {
         prisma.bobotIndikator.findMany({
           where: {
             id_pakar: { not: null },
-            NOT: { id_indikator: { in: [14, 15] } },
+            NOT: { id_indikator: { in: constraintIndIds } },
           },
           include: {
             pakar: {
@@ -291,10 +299,17 @@ class AHPService {
   }
 
   static async getKriteriaItems() {
+    // Cari kriteria yang memiliki indikator pembatas secara dinamis
+    const constraintIndicators = await prisma.indikator.findMany({
+      where: { tipe_nilai: "MASK" },
+      select: { id_kriteria: true },
+    });
+    const constraintCritIds = [...new Set(constraintIndicators.map((i) => i.id_kriteria))];
+
     const data = await prisma.kriteria.findMany({
       where: {
         NOT: {
-          id_kriteria: 6, // Pembatas Lahan is a constraint and doesn't participate in AHP
+          id_kriteria: { in: constraintCritIds },
         },
       },
       orderBy: [

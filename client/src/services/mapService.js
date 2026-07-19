@@ -79,7 +79,7 @@ export const mapService = {
     return grids;
   },
 
-  async getActiveMap() {
+  async getActiveMap(indicatorList = []) {
     const grids = await wlcService.getGrids();
     
     let customAhp = null;
@@ -95,6 +95,10 @@ export const mapService = {
     if (customAhp && customAhp.globalIndicatorWeights) {
       const weights = customAhp.globalIndicatorWeights;
       if (grids && grids.features) {
+        const maskIndicatorKeys = indicatorList
+          .filter(ind => ind.tipe_nilai === "MASK" || ind.tipeNilai === "MASK")
+          .map(ind => "ind_" + ind.id);
+
         grids.features = grids.features.map((f) => {
           const scores = f.properties.indicatorScores || {};
           
@@ -103,8 +107,7 @@ export const mapService = {
           
           for (const [indIdStr, weightVal] of Object.entries(weights)) {
             const indId = Number(indIdStr);
-            const indKey = indicatorIdToKey[indId];
-            if (!indKey) continue;
+            const indKey = "ind_" + indId;
             
             const fuzzyVal = scores["fuzzy_" + indKey] ?? 0;
             scoreSum += fuzzyVal * weightVal;
@@ -112,7 +115,9 @@ export const mapService = {
           }
           
           const rawScore = weightSum > 0 ? scoreSum / weightSum : scoreSum;
-          const isConstrained = scores.sawah === 0 || scores.sempadan_sungai === 0;
+          const isConstrained = maskIndicatorKeys.length > 0
+            ? maskIndicatorKeys.some(key => scores[key] === 0)
+            : (scores.sawah === 0 || scores.sempadan_sungai === 0 || scores.ind_14 === 0 || scores.ind_15 === 0);
           const finalScore = isConstrained ? 0.0 : rawScore;
           
           f.properties.scoreUsed = finalScore;
@@ -190,11 +195,11 @@ export const mapService = {
     return this.getDefaultMap();
   },
 
-  async getCustomAhpMap() {
-    return this.getActiveMap();
+  async getCustomAhpMap(indicatorList = []) {
+    return this.getActiveMap(indicatorList);
   },
 
-  async getMapFromWeights() {
-    return this.getActiveMap();
+  async getMapFromWeights(indicatorList = []) {
+    return this.getActiveMap(indicatorList);
   },
 };

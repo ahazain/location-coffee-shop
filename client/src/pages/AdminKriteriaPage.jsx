@@ -48,7 +48,7 @@ export default function AdminKriteriaPage() {
 
     if (mode === "edit" && kriteria) {
       setCurrentKriteria({
-        id_kriteria: kriteria.id_kriteria,
+        id_kriteria: kriteria.id || kriteria.id_kriteria,
         nama_kriteria: kriteria.nama_kriteria || "",
         deskripsi: kriteria.deskripsi || "",
       });
@@ -200,7 +200,7 @@ export default function AdminKriteriaPage() {
                 ) : (
                   kriteriaList.map((item, index) => (
                     <tr
-                      key={item.id_kriteria}
+                      key={item.id}
                       className="hover:bg-stone-50/40 transition"
                     >
                       <td className="px-6 py-4 font-semibold text-stone-400 font-mono">
@@ -232,7 +232,7 @@ export default function AdminKriteriaPage() {
                             type="button"
                             onClick={() =>
                               handleDelete(
-                                item.id_kriteria,
+                                item.id,
                                 item.nama_kriteria
                               )
                             }

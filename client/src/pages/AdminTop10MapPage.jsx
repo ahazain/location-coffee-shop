@@ -6,6 +6,7 @@ import AdminLayout from "../layouts/AdminLayout";
 import Card from "../components/common/Card";
 import { mapService } from "../services/mapService";
 import { wlcService } from "../services/api/wlcService";
+import { indikatorService } from "../services/api/indikatorService";
 
 // Helper to calculate mathematical centroid of a Polygon/MultiPolygon
 function getCentroid(feature) {
@@ -84,6 +85,22 @@ export default function AdminTop10MapPage() {
       try {
         const grids = await mapService.getDefaultMap();
         const boundary = await wlcService.getBoundary().catch(() => null);
+        const indicatorsRes = await indikatorService.getAll().catch(() => null);
+        const indicatorList = indicatorsRes?.data_indikator || [];
+
+        const dynamicNames = {};
+        const maskIds = [];
+
+        indicatorList.forEach((ind) => {
+          const isMask = ind.tipe_nilai === "MASK" || ind.tipeNilai === "MASK";
+          const key = "ind_" + ind.id;
+          dynamicNames[key] = ind.nama_indikator;
+          if (isMask) {
+            maskIds.push(key);
+          }
+        });
+
+        const hasDynamic = indicatorList.length > 0;
 
         setGeojson(grids);
         setBoundaryGeojson(boundary);
@@ -101,10 +118,17 @@ export default function AdminTop10MapPage() {
             const scores = f.properties.indicatorScores || {};
             const fuzzyScores = [];
             for (const [key, val] of Object.entries(scores)) {
-              if (key.startsWith("fuzzy_") && key !== "fuzzy_sawah" && key !== "fuzzy_sempadan_sungai") {
+              if (key.startsWith("fuzzy_")) {
                 const rawKey = key.replace("fuzzy_", "");
-                const displayName = indicatorNames[rawKey] || rawKey;
-                fuzzyScores.push({ name: displayName, score: Number(val) });
+                if (hasDynamic) {
+                  if (!rawKey.startsWith("ind_") || maskIds.includes(rawKey)) continue;
+                  const displayName = dynamicNames[rawKey] || rawKey;
+                  fuzzyScores.push({ name: displayName, score: Number(val) });
+                } else {
+                  if (key === "fuzzy_sawah" || key === "fuzzy_sempadan_sungai") continue;
+                  const displayName = indicatorNames[rawKey] || rawKey;
+                  fuzzyScores.push({ name: displayName, score: Number(val) });
+                }
               }
             }
             fuzzyScores.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));

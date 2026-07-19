@@ -17,7 +17,8 @@ export default function ValidationMapView({
   coffeePointsGeojson, 
   boundaryGeojson,
   selectedGridCode, 
-  onSelectGrid 
+  onSelectGrid,
+  indicatorList = []
 }) {
   
   if (!gridGeojson) {
@@ -28,6 +29,9 @@ export default function ValidationMapView({
     );
   }
 
+  const maskIndicators = indicatorList.filter(ind => ind.tipe_nilai === "MASK" || ind.tipeNilai === "MASK");
+  const maskKeys = maskIndicators.map(ind => "ind_" + ind.id);
+
   return (
     <MapContainer 
       center={[-8.165, 113.72]} 
@@ -35,27 +39,17 @@ export default function ValidationMapView({
       scrollWheelZoom 
       className="h-full w-full rounded-3xl"
     >
-      <LayersControl position="topright">
-        <LayersControl.BaseLayer name="OpenStreetMap">
-          <TileLayer 
-            attribution="&copy; OpenStreetMap contributors" 
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
-          />
-        </LayersControl.BaseLayer>
-        <LayersControl.BaseLayer checked name="Google Satellite">
-          <TileLayer 
-            attribution="&copy; Google" 
-            url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}" 
-          />
-        </LayersControl.BaseLayer>
-      </LayersControl>
+      <TileLayer 
+        attribution="&copy; OpenStreetMap contributors" 
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+      />
 
       {boundaryGeojson && (
         <GeoJSON
           data={boundaryGeojson}
           style={() => ({
             color: "#4f46e5",
-            weight: 2,
+            weight: 2.5,
             fillColor: "transparent",
             fillOpacity: 0,
             dashArray: "5, 5",
@@ -85,10 +79,22 @@ export default function ValidationMapView({
           };
         }}
         onEachFeature={(feature, layer) => {
-          const isConstrained = feature.properties.indicatorScores?.sawah === 0 || feature.properties.indicatorScores?.sempadan_sungai === 0;
-          const constraintText = isConstrained 
-            ? `<br/><span class="text-xs text-red-600 font-semibold font-mono">⚠️ Terkena Constraint:${feature.properties.indicatorScores?.sawah === 0 ? " [Sawah]" : ""}${feature.properties.indicatorScores?.sempadan_sungai === 0 ? " [Sempadan Sungai]" : ""}</span>`
-            : "";
+          const scores = feature.properties.indicatorScores || {};
+          const isConstrained = maskKeys.length > 0
+            ? maskKeys.some(key => scores[key] === 0 || scores["fuzzy_" + key] === 0)
+            : (scores.sawah === 0 || scores.sempadan_sungai === 0 || scores.ind_14 === 0 || scores.ind_15 === 0);
+
+          let constraintText = "";
+          if (isConstrained) {
+            if (maskKeys.length > 0) {
+              const violatedNames = maskIndicators
+                .filter(ind => scores["ind_" + ind.id] === 0 || scores["fuzzy_ind_" + ind.id] === 0)
+                .map(ind => ind.name);
+              constraintText = `<br/><span class="text-xs text-red-600 font-semibold font-mono">⚠️ Terkena Constraint: [${violatedNames.join(", ")}]</span>`;
+            } else {
+              constraintText = `<br/><span class="text-xs text-red-600 font-semibold font-mono">⚠️ Terkena Constraint:${scores.sawah === 0 ? " [Sawah]" : ""}${scores.sempadan_sungai === 0 ? " [Sempadan Sungai]" : ""}</span>`;
+            }
+          }
 
           layer.bindPopup(`
             <div class="font-sans text-xs">

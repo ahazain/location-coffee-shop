@@ -75,7 +75,7 @@ export default function AdminIndicatorsPage() {
       setCurrentIndikator({
         id_indikator: null,
         id_kriteria:
-          kriteriaList.length > 0 ? kriteriaList[0].id_kriteria : "",
+          kriteriaList.length > 0 ? kriteriaList[0].id : "",
         nama_indikator: "",
         deskripsi: "",
         satuan: "",
@@ -231,8 +231,8 @@ export default function AdminIndicatorsPage() {
                   </option>
                   {kriteriaList.map((kriteria) => (
                     <option
-                      key={kriteria.id_kriteria}
-                      value={kriteria.id_kriteria}
+                      key={kriteria.id}
+                      value={kriteria.id}
                     >
                       {kriteria.nama_kriteria}
                     </option>

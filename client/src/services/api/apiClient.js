@@ -1,4 +1,16 @@
-const BASE_URL = "http://localhost:3001";
+const getBaseUrl = () => {
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  
+  if (hostname.includes("5173")) {
+    const dynamicBackend = hostname.replace("5173", "3001");
+    return `${protocol}//${dynamicBackend}`;
+  }
+  
+  return `http://${hostname}:3001`;
+};
+
+const BASE_URL = getBaseUrl();
 
 const getHeaders = (extraHeaders = {}) => {
   const headers = { ...extraHeaders };
@@ -63,6 +75,12 @@ export const apiClient = {
 
   async handleResponse(response) {
     if (response.status === 401) {
+      const isLoginRequest = response.url.includes("/auth/login");
+      if (isLoginRequest) {
+        const json = await response.json().catch(() => ({}));
+        throw new Error(json.message || "Email atau password salah.");
+      }
+
       localStorage.removeItem("admin_token");
       localStorage.removeItem("admin_profile");
       if (!window.location.pathname.endsWith("/admin/login")) {

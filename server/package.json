@@ -3,7 +3,8 @@
     "test": "jest --coverage",
     "start": "nodemon app.js",
     "seed": "node --env-file=.env src/prisma/seeder/seed.js",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "reset-all": "npx prisma migrate reset --force && node clean-storage.js"
   },
   "dependencies": {
     "@dotenvx/dotenvx": "^1.75.1",

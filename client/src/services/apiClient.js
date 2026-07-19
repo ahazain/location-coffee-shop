@@ -1,4 +1,16 @@
-const BASE_URL = "http://localhost:3001";
+const getBaseUrl = () => {
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  
+  if (hostname.includes("5173")) {
+    const dynamicBackend = hostname.replace("5173", "3001");
+    return `${protocol}//${dynamicBackend}`;
+  }
+  
+  return `http://${hostname}:3001`;
+};
+
+const BASE_URL = getBaseUrl();
 
 export const apiClient = {
   async get(endpoint) {

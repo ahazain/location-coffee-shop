@@ -3,11 +3,42 @@ import { wlcService } from "./api/wlcService";
 
 export const adminService = {
   async getMapPreview() {
-    const grids = await mapService.getDefaultMap();
-    const active = await wlcService.getActive();
+    try {
+      const grids = await mapService.getDefaultMap().catch(() => null);
+      const active = await wlcService.getActive().catch(() => null);
 
-    // Check if there is an active WLC
-    if (!active) {
+      // Check if there is an active WLC or if grids are missing
+      if (!active || !grids) {
+        return {
+          map: null,
+          previewStatus: {
+            statusLabel: "Belum Dihitung",
+            draftVersion: "-",
+          },
+          publishStatus: {
+            statusLabel: "Belum Dipublikasikan",
+          },
+          canPublish: false,
+        };
+      }
+
+      const currentVersion = active.versi;
+      const publishedVersion = localStorage.getItem("wlc_map_published_version");
+      const isPublished = publishedVersion === String(currentVersion);
+
+      return {
+        map: grids,
+        previewStatus: {
+          statusLabel: "Draft Siap",
+          draftVersion: `Versi ${currentVersion}`,
+        },
+        publishStatus: {
+          statusLabel: isPublished ? `Terpublikasi (Versi ${currentVersion})` : "Belum Dipublikasikan",
+        },
+        canPublish: !isPublished,
+      };
+    } catch (err) {
+      console.error("Gagal mengambil preview peta:", err);
       return {
         map: null,
         previewStatus: {
@@ -20,22 +51,6 @@ export const adminService = {
         canPublish: false,
       };
     }
-
-    const currentVersion = active.versi;
-    const publishedVersion = localStorage.getItem("wlc_map_published_version");
-    const isPublished = publishedVersion === String(currentVersion);
-
-    return {
-      map: grids,
-      previewStatus: {
-        statusLabel: "Draft Siap",
-        draftVersion: `Versi ${currentVersion}`,
-      },
-      publishStatus: {
-        statusLabel: isPublished ? `Terpublikasi (Versi ${currentVersion})` : "Belum Dipublikasikan",
-      },
-      canPublish: !isPublished,
-    };
   },
 
   async publishMap() {

@@ -12,24 +12,7 @@ class WlcService {
    * Pemetaan manual ID indikator ke string kode untuk response nilai_indikator di frontend.
    */
   static mapIndikatorIdToKode(id) {
-    const mapping = {
-      1: "kepadatan_layanan_makan_non_coffee",
-      2: "kepadatan_layanan_olahraga_rekreasi",
-      3: "kepadatan_hunian",
-      4: "kedekatan_pusat_belanja",
-      5: "kepadatan_kampus_fasilitas_pendidikan",
-      6: "kepadatan_kantor_jasa_keuangan_bisnis",
-      7: "intensitas_cahaya_malam",
-      8: "kepadatan_populasi",
-      9: "jarak_jalan_utama",
-      10: "kedekatan_simpul_transportasi",
-      11: "kepadatan_simpang_jalan",
-      12: "kepadatan_coffee_shop_existing",
-      13: "jarak_coffee_shop_existing_terdekat",
-      14: "sawah",
-      15: "sempadan_sungai",
-    };
-    return mapping[id] || `indikator_${id}`;
+    return `ind_${id}`;
   }
 
   /**

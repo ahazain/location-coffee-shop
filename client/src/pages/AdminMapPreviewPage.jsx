@@ -9,6 +9,7 @@ import MapView from "../components/map/MapView";
 import AdminLayout from "../layouts/AdminLayout";
 import { adminService } from "../services/adminService";
 import { wlcService } from "../services/api/wlcService";
+import { indikatorService } from "../services/api/indikatorService";
 
 export default function AdminMapPreviewPage() {
   const [geojson, setGeojson] = useState(null);
@@ -19,6 +20,7 @@ export default function AdminMapPreviewPage() {
   const [canPublish, setCanPublish] = useState(false);
   const [message, setMessage] = useState(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [indicatorList, setIndicatorList] = useState([]);
 
   function loadPreview() {
     adminService.getMapPreview().then((data) => {
@@ -29,6 +31,11 @@ export default function AdminMapPreviewPage() {
       setCanPublish(data.canPublish);
     });
     wlcService.getBoundary().then(setBoundaryGeojson).catch(() => null);
+    indikatorService.getAll().then((res) => {
+      if (res && res.data_indikator) {
+        setIndicatorList(res.data_indikator);
+      }
+    }).catch(() => null);
   }
 
   useEffect(() => {
@@ -50,8 +57,8 @@ export default function AdminMapPreviewPage() {
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div>
             <Badge>Preview admin</Badge>
-            <h2 className="mt-3 text-2xl font-black text-stone-950">Preview dan publish peta hasil WLC</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
+            <h2 className="mt-3 text-2xl font-black text-stone-950 font-sans">Preview dan publish peta hasil WLC</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500 font-sans">
               Admin meninjau hasil akhir setelah dataset, fuzzy, AHP default, dan WLC dijalankan. Jika sudah sesuai, hasil dapat dipublish sebagai peta default pelaku usaha.
             </p>
           </div>
@@ -65,16 +72,16 @@ export default function AdminMapPreviewPage() {
 
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           <div className="rounded-2xl bg-stone-50 p-4">
-            <p className="text-xs text-stone-500">Status WLC</p>
-            <p className="mt-1 text-sm font-bold text-stone-950">{previewStatus?.statusLabel || "-"}</p>
+            <p className="text-xs text-stone-500 font-sans">Status WLC</p>
+            <p className="mt-1 text-sm font-bold text-stone-950 font-sans">{previewStatus?.statusLabel || "-"}</p>
           </div>
           <div className="rounded-2xl bg-stone-50 p-4">
-            <p className="text-xs text-stone-500">Draft</p>
-            <p className="mt-1 text-sm font-bold text-stone-950">{previewStatus?.draftVersion || "-"}</p>
+            <p className="text-xs text-stone-500 font-sans">Draft</p>
+            <p className="mt-1 text-sm font-bold text-stone-950 font-mono">{previewStatus?.draftVersion || "-"}</p>
           </div>
           <div className="rounded-2xl bg-stone-50 p-4">
-            <p className="text-xs text-stone-500">Publish</p>
-            <p className="mt-1 text-sm font-bold text-stone-950">{publishStatus?.statusLabel || "-"}</p>
+            <p className="text-xs text-stone-500 font-sans">Publish</p>
+            <p className="mt-1 text-sm font-bold text-stone-950 font-sans">{publishStatus?.statusLabel || "-"}</p>
           </div>
         </div>
       </Card>
@@ -90,36 +97,36 @@ export default function AdminMapPreviewPage() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="h-[72vh] overflow-hidden rounded-3xl border border-stone-200 bg-white p-2 shadow-sm">
-          <MapView geojson={geojson} boundaryGeojson={boundaryGeojson} selectedGridCode={selectedGrid?.gridCode} onSelectGrid={setSelectedGrid} />
+          <MapView geojson={geojson} boundaryGeojson={boundaryGeojson} selectedGridCode={selectedGrid?.gridCode} onSelectGrid={setSelectedGrid} indicatorList={indicatorList} />
         </div>
         <aside className="space-y-4">
           <Card className="p-4">
-            <h3 className="font-bold text-stone-950">Ringkasan peta</h3>
+            <h3 className="font-bold text-stone-950 font-sans">Ringkasan peta</h3>
             <div className="mt-4 grid grid-cols-2 gap-2 text-center">
               <div className="rounded-2xl bg-stone-50 p-3">
-                <p className="text-lg font-black text-stone-950">{geojson?.summary?.total ?? "-"}</p>
-                <p className="text-xs text-stone-500">Total Grid</p>
+                <p className="text-lg font-black text-stone-950 font-mono">{geojson?.summary?.total ?? "-"}</p>
+                <p className="text-xs text-stone-500 font-sans">Total Grid</p>
               </div>
               <div className="rounded-2xl bg-stone-50 p-3">
-                <p className="text-lg font-black text-stone-950">{geojson?.summary?.sesuai ?? "-"}</p>
-                <p className="text-xs text-stone-500">Sesuai</p>
+                <p className="text-lg font-black text-stone-950 font-mono">{geojson?.summary?.sesuai ?? "-"}</p>
+                <p className="text-xs text-stone-500 font-sans">Sesuai</p>
               </div>
               <div className="rounded-2xl bg-stone-50 p-3">
-                <p className="text-lg font-black text-stone-950">{geojson?.summary?.cukupSesuai ?? "-"}</p>
-                <p className="text-xs text-stone-500">Cukup Sesuai</p>
+                <p className="text-lg font-black text-stone-950 font-mono">{geojson?.summary?.cukupSesuai ?? "-"}</p>
+                <p className="text-xs text-stone-500 font-sans">Cukup Sesuai</p>
               </div>
               <div className="rounded-2xl bg-stone-50 p-3">
-                <p className="text-lg font-black text-stone-950">{geojson?.summary?.kurangSesuai ?? "-"}</p>
-                <p className="text-xs text-stone-500">Kurang Sesuai</p>
+                <p className="text-lg font-black text-stone-950 font-mono">{geojson?.summary?.kurangSesuai ?? "-"}</p>
+                <p className="text-xs text-stone-500 font-sans">Kurang Sesuai</p>
               </div>
             </div>
           </Card>
-          <Legend geojson={geojson} />
+          <Legend geojson={geojson} indicatorList={indicatorList} />
         </aside>
       </div>
 
       <div className="mt-5">
-        <GridDetailPanel selectedGrid={selectedGrid} />
+        <GridDetailPanel selectedGrid={selectedGrid} indicatorList={indicatorList} />
       </div>
     </AdminLayout>
   );

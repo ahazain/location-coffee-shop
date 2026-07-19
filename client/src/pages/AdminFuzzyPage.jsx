@@ -41,10 +41,12 @@ function arahLabel(arah) {
 }
 
 function getIndikatorId(indikator) {
+  if (!indikator) return null;
   return indikator.id || indikator.id_indikator;
 }
 
 function getKriteriaId(indikator) {
+  if (!indikator) return 999;
   return (
     indikator.id_kriteria ||
     indikator.kriteria?.id_kriteria ||
@@ -54,6 +56,7 @@ function getKriteriaId(indikator) {
 }
 
 function getKriteriaName(indikator) {
+  if (!indikator) return "Lainnya";
   return indikator.kriteria?.nama_kriteria || "Lainnya";
 }
 
